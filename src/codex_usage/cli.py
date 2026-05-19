@@ -10,6 +10,10 @@ from codex_usage.parser import parse_token_usage_event_with_status
 from codex_usage.report import summarize
 from codex_usage.scanner import DEFAULT_SESSIONS_DIR, iter_session_files
 
+NON_CACHED_INPUT_USD_PER_MILLION = 5.0
+CACHED_INPUT_USD_PER_MILLION = 0.5
+OUTPUT_USD_PER_MILLION = 30.0
+
 
 def _human_tokens(value: int) -> str:
     abs_value = abs(value)
@@ -44,6 +48,22 @@ def _day_key(value) -> str:
     return value.date().isoformat()
 
 
+def _estimated_cost_usd(
+    input_tokens: int,
+    cached_input_tokens: int,
+    output_tokens: int,
+) -> float:
+    non_cached_input = input_tokens - cached_input_tokens
+    non_cached_input_cost = _usd_from_million_tokens(
+        non_cached_input, NON_CACHED_INPUT_USD_PER_MILLION
+    )
+    cached_input_cost = _usd_from_million_tokens(
+        cached_input_tokens, CACHED_INPUT_USD_PER_MILLION
+    )
+    output_cost = _usd_from_million_tokens(output_tokens, OUTPUT_USD_PER_MILLION)
+    return non_cached_input_cost + cached_input_cost + output_cost
+
+
 def _write_events_csv(path: Path, events) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     with path.open("w", newline="", encoding="utf-8") as handle:
@@ -57,6 +77,7 @@ def _write_events_csv(path: Path, events) -> None:
                 "output_tokens",
                 "reasoning_tokens",
                 "total_tokens",
+                "estimated_cost",
             ]
         )
         for event in events:
@@ -69,6 +90,7 @@ def _write_events_csv(path: Path, events) -> None:
                     event.output_tokens,
                     event.reasoning_output_tokens,
                     event.total_tokens,
+                    f"{_estimated_cost_usd(event.input_tokens, event.cached_input_tokens, event.output_tokens):.6f}",
                 ]
             )
 
@@ -91,6 +113,7 @@ def _write_daily_csv(
                 "non_cached_tokens",
                 "output_tokens",
                 "cache_ratio",
+                "estimated_cost",
             ]
         )
         for day in sorted(daily_events):
@@ -108,6 +131,7 @@ def _write_daily_csv(
                     non_cached,
                     daily_output_tokens[day],
                     cache_ratio,
+                    f"{_estimated_cost_usd(input_tokens, cached_tokens, daily_output_tokens[day]):.6f}",
                 ]
             )
 
@@ -222,9 +246,13 @@ def cmd_summary(
         statistics.median(event.total_tokens for event in events) if events else 0.0
     )
     top_heaviest_events = sorted(events, key=lambda event: event.total_tokens, reverse=True)[:10]
-    non_cached_input_cost = _usd_from_million_tokens(non_cached_input, 5.0)
-    cached_input_cost = _usd_from_million_tokens(summary.cached_input_tokens, 0.5)
-    output_cost = _usd_from_million_tokens(summary.output_tokens, 30.0)
+    non_cached_input_cost = _usd_from_million_tokens(
+        non_cached_input, NON_CACHED_INPUT_USD_PER_MILLION
+    )
+    cached_input_cost = _usd_from_million_tokens(
+        summary.cached_input_tokens, CACHED_INPUT_USD_PER_MILLION
+    )
+    output_cost = _usd_from_million_tokens(summary.output_tokens, OUTPUT_USD_PER_MILLION)
     estimated_total_cost = non_cached_input_cost + cached_input_cost + output_cost
 
     if export_events_csv is not None:
