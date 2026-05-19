@@ -166,3 +166,10 @@ codex-usage summary \
   --save-report docs/summary.txt \
   --export-events-csv docs/events.csv \
   --export-daily-csv docs/daily_summary.csv
+
+
+codex-usage summary `
+  --sessions-dir C:\Users\marco\.codex\sessions `
+  --export-events-csv docs\events.csv `
+  --export-daily-csv docs\daily_summary.csv `
+  --export-model-costs-csv docs\model_costs.csv

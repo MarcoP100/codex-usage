@@ -51,6 +51,9 @@ def _extract_model(payload: dict[str, Any], event_payload: dict[str, Any]) -> st
         payload.get("model"),
         info.get("model") if isinstance(info, dict) else None,
         payload.get("model_slug"),
+        payload.get("default_model_slug"),
+        event_payload.get("model_slug"),
+        event_payload.get("default_model_slug"),
     )
     for candidate in candidates:
         if isinstance(candidate, str) and candidate:
@@ -123,6 +126,52 @@ def parse_token_usage_event(line: str) -> TokenUsageEvent | None:
     if status != "valid":
         return None
     return event
+
+
+def parse_turn_context_metadata(line: str) -> tuple[str | None, str | None]:
+    try:
+        payload = json.loads(line)
+    except json.JSONDecodeError:
+        return (None, None)
+    if not isinstance(payload, dict):
+        return (None, None)
+    if payload.get("type") != "turn_context":
+        return (None, None)
+    event_payload = payload.get("payload")
+    if not isinstance(event_payload, dict):
+        return (None, None)
+
+    model_candidates = (
+        event_payload.get("model"),
+        payload.get("model"),
+        event_payload.get("model_slug"),
+        payload.get("model_slug"),
+        event_payload.get("default_model_slug"),
+        payload.get("default_model_slug"),
+    )
+    model: str | None = None
+    for candidate in model_candidates:
+        if isinstance(candidate, str) and candidate:
+            model = candidate
+            break
+
+    collaboration_mode = event_payload.get("collaboration_mode")
+    settings = (
+        collaboration_mode.get("settings")
+        if isinstance(collaboration_mode, dict)
+        else None
+    )
+    effort_candidates = (
+        event_payload.get("effort"),
+        settings.get("reasoning_effort") if isinstance(settings, dict) else None,
+        payload.get("effort"),
+    )
+    effort: str | None = None
+    for candidate in effort_candidates:
+        if isinstance(candidate, str) and candidate:
+            effort = candidate
+            break
+    return (model, effort)
 
 
 def iter_events_from_file(path: Path) -> Iterator[TokenUsageEvent]:

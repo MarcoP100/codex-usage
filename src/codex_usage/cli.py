@@ -6,13 +6,17 @@ import statistics
 from collections import defaultdict
 from pathlib import Path
 
-from codex_usage.parser import parse_token_usage_event_with_status
+from codex_usage.parser import parse_token_usage_event_with_status, parse_turn_context_metadata
 from codex_usage.report import summarize
 from codex_usage.scanner import DEFAULT_SESSIONS_DIR, iter_session_files
 
-NON_CACHED_INPUT_USD_PER_MILLION = 5.0
-CACHED_INPUT_USD_PER_MILLION = 0.5
-OUTPUT_USD_PER_MILLION = 30.0
+MODEL_PRICING_USD_PER_MILLION: dict[str, tuple[float, float, float]] = {
+    "gpt-5.5": (5.0, 0.5, 30.0),
+    "gpt-5.4": (2.5, 0.25, 15.0),
+    "gpt-5.4-mini": (0.75, 0.075, 4.5),
+    "gpt-5.3-codex": (1.75, 0.175, 14.0),
+}
+DEFAULT_PRICING_USD_PER_MILLION = MODEL_PRICING_USD_PER_MILLION["gpt-5.5"]
 
 
 def _human_tokens(value: int) -> str:
@@ -49,19 +53,33 @@ def _day_key(value) -> str:
 
 
 def _estimated_cost_usd(
+    model: str | None,
     input_tokens: int,
     cached_input_tokens: int,
     output_tokens: int,
 ) -> float:
+    return sum(_cost_components_usd(model, input_tokens, cached_input_tokens, output_tokens))
+
+
+def _cost_components_usd(
+    model: str | None,
+    input_tokens: int,
+    cached_input_tokens: int,
+    output_tokens: int,
+) -> tuple[float, float, float]:
+    model_key = (model or "").strip().lower()
+    non_cached_rate, cached_rate, output_rate = MODEL_PRICING_USD_PER_MILLION.get(
+        model_key, DEFAULT_PRICING_USD_PER_MILLION
+    )
     non_cached_input = input_tokens - cached_input_tokens
     non_cached_input_cost = _usd_from_million_tokens(
-        non_cached_input, NON_CACHED_INPUT_USD_PER_MILLION
+        non_cached_input, non_cached_rate
     )
     cached_input_cost = _usd_from_million_tokens(
-        cached_input_tokens, CACHED_INPUT_USD_PER_MILLION
+        cached_input_tokens, cached_rate
     )
-    output_cost = _usd_from_million_tokens(output_tokens, OUTPUT_USD_PER_MILLION)
-    return non_cached_input_cost + cached_input_cost + output_cost
+    output_cost = _usd_from_million_tokens(output_tokens, output_rate)
+    return (non_cached_input_cost, cached_input_cost, output_cost)
 
 
 def _write_events_csv(path: Path, events) -> None:
@@ -77,10 +95,20 @@ def _write_events_csv(path: Path, events) -> None:
                 "output_tokens",
                 "reasoning_tokens",
                 "total_tokens",
+                "estimated_non_cached_input_cost",
+                "estimated_cached_input_cost",
+                "estimated_output_cost",
                 "estimated_cost",
+                "reasoning_effort",
             ]
         )
         for event in events:
+            non_cached_cost, cached_cost, output_cost = _cost_components_usd(
+                event.model,
+                event.input_tokens,
+                event.cached_input_tokens,
+                event.output_tokens,
+            )
             writer.writerow(
                 [
                     event.timestamp.isoformat(),
@@ -90,7 +118,11 @@ def _write_events_csv(path: Path, events) -> None:
                     event.output_tokens,
                     event.reasoning_output_tokens,
                     event.total_tokens,
-                    f"{_estimated_cost_usd(event.input_tokens, event.cached_input_tokens, event.output_tokens):.6f}",
+                    f"{non_cached_cost:.6f}",
+                    f"{cached_cost:.6f}",
+                    f"{output_cost:.6f}",
+                    f"{(non_cached_cost + cached_cost + output_cost):.6f}",
+                    event.reasoning_effort or "unknown",
                 ]
             )
 
@@ -101,6 +133,10 @@ def _write_daily_csv(
     daily_input_tokens: dict[str, int],
     daily_cached_tokens: dict[str, int],
     daily_output_tokens: dict[str, int],
+    daily_non_cached_input_cost: dict[str, float],
+    daily_cached_input_cost: dict[str, float],
+    daily_output_cost: dict[str, float],
+    daily_estimated_cost: dict[str, float],
 ) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     with path.open("w", newline="", encoding="utf-8") as handle:
@@ -113,6 +149,9 @@ def _write_daily_csv(
                 "non_cached_tokens",
                 "output_tokens",
                 "cache_ratio",
+                "estimated_non_cached_input_cost",
+                "estimated_cached_input_cost",
+                "estimated_output_cost",
                 "estimated_cost",
             ]
         )
@@ -131,7 +170,45 @@ def _write_daily_csv(
                     non_cached,
                     daily_output_tokens[day],
                     cache_ratio,
-                    f"{_estimated_cost_usd(input_tokens, cached_tokens, daily_output_tokens[day]):.6f}",
+                    f"{daily_non_cached_input_cost[day]:.6f}",
+                    f"{daily_cached_input_cost[day]:.6f}",
+                    f"{daily_output_cost[day]:.6f}",
+                    f"{daily_estimated_cost[day]:.6f}",
+                ]
+            )
+
+
+def _write_model_costs_csv(
+    path: Path,
+    model_non_cached_input_cost: dict[str, float],
+    model_cached_input_cost: dict[str, float],
+    model_output_cost: dict[str, float],
+    model_estimated_cost: dict[str, float],
+) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with path.open("w", newline="", encoding="utf-8") as handle:
+        writer = csv.writer(handle)
+        writer.writerow(
+            [
+                "model",
+                "estimated_non_cached_input_cost",
+                "estimated_cached_input_cost",
+                "estimated_output_cost",
+                "estimated_cost",
+            ]
+        )
+        for model in sorted(
+            model_estimated_cost,
+            key=lambda item: model_estimated_cost[item],
+            reverse=True,
+        ):
+            writer.writerow(
+                [
+                    model,
+                    f"{model_non_cached_input_cost[model]:.6f}",
+                    f"{model_cached_input_cost[model]:.6f}",
+                    f"{model_output_cost[model]:.6f}",
+                    f"{model_estimated_cost[model]:.6f}",
                 ]
             )
 
@@ -162,6 +239,11 @@ def _build_parser() -> argparse.ArgumentParser:
         type=Path,
         help="Save console-style summary report to this text file",
     )
+    summary_parser.add_argument(
+        "--export-model-costs-csv",
+        type=Path,
+        help="Write estimated costs by model to this CSV file",
+    )
     return parser
 
 
@@ -170,6 +252,7 @@ def cmd_summary(
     export_events_csv: Path | None,
     export_daily_csv: Path | None,
     save_report: Path | None,
+    export_model_costs_csv: Path | None,
 ) -> int:
     events = []
     files_scanned = 0
@@ -186,13 +269,30 @@ def cmd_summary(
     daily_output_tokens: dict[str, int] = defaultdict(int)
     daily_events: dict[str, int] = defaultdict(int)
     model_total_tokens: dict[str, int] = defaultdict(int)
+    effort_total_tokens: dict[str, int] = defaultdict(int)
+    model_effort_total_tokens: dict[str, int] = defaultdict(int)
+    daily_estimated_cost: dict[str, float] = defaultdict(float)
+    daily_non_cached_input_cost: dict[str, float] = defaultdict(float)
+    daily_cached_input_cost: dict[str, float] = defaultdict(float)
+    daily_output_cost: dict[str, float] = defaultdict(float)
+    model_estimated_cost: dict[str, float] = defaultdict(float)
+    model_non_cached_input_cost: dict[str, float] = defaultdict(float)
+    model_cached_input_cost: dict[str, float] = defaultdict(float)
+    model_output_cost: dict[str, float] = defaultdict(float)
 
     for jsonl_path in iter_session_files(sessions_dir):
         files_scanned += 1
         file_events = []
+        current_model: str | None = None
+        current_effort: str | None = None
         with jsonl_path.open("r", encoding="utf-8") as handle:
             for line in handle:
                 lines_scanned += 1
+                turn_model, turn_effort = parse_turn_context_metadata(line)
+                if turn_model:
+                    current_model = turn_model
+                if turn_effort:
+                    current_effort = turn_effort
                 status, event = parse_token_usage_event_with_status(line)
                 if status == "malformed_json":
                     malformed_json_lines += 1
@@ -205,6 +305,20 @@ def cmd_summary(
                     continue
                 if status != "valid" or event is None:
                     continue
+                if (event.model is None and current_model is not None) or (
+                    event.reasoning_effort is None and current_effort is not None
+                ):
+                    event = event.__class__(
+                        timestamp=event.timestamp,
+                        input_tokens=event.input_tokens,
+                        cached_input_tokens=event.cached_input_tokens,
+                        output_tokens=event.output_tokens,
+                        reasoning_output_tokens=event.reasoning_output_tokens,
+                        total_tokens=event.total_tokens,
+                        cumulative_total_tokens=event.cumulative_total_tokens,
+                        model=event.model or current_model,
+                        reasoning_effort=event.reasoning_effort or current_effort,
+                    )
                 dedupe_key = (
                     event.timestamp.isoformat(),
                     event.total_tokens,
@@ -233,6 +347,25 @@ def cmd_summary(
             daily_output_tokens[day] += event.output_tokens
             daily_events[day] += 1
             model_total_tokens[event.model or "unknown"] += event.total_tokens
+            effort_total_tokens[event.reasoning_effort or "unknown"] += event.total_tokens
+            model_effort_key = f"{event.model or 'unknown'} | {event.reasoning_effort or 'unknown'}"
+            model_effort_total_tokens[model_effort_key] += event.total_tokens
+            non_cached_cost, cached_cost, output_cost = _cost_components_usd(
+                event.model,
+                event.input_tokens,
+                event.cached_input_tokens,
+                event.output_tokens,
+            )
+            event_estimated_cost = non_cached_cost + cached_cost + output_cost
+            daily_estimated_cost[day] += event_estimated_cost
+            daily_non_cached_input_cost[day] += non_cached_cost
+            daily_cached_input_cost[day] += cached_cost
+            daily_output_cost[day] += output_cost
+            model_key = event.model or "unknown"
+            model_estimated_cost[event.model or "unknown"] += event_estimated_cost
+            model_non_cached_input_cost[model_key] += non_cached_cost
+            model_cached_input_cost[model_key] += cached_cost
+            model_output_cost[model_key] += output_cost
 
     summary = summarize(events)
     non_cached_input = summary.input_tokens - summary.cached_input_tokens
@@ -246,14 +379,15 @@ def cmd_summary(
         statistics.median(event.total_tokens for event in events) if events else 0.0
     )
     top_heaviest_events = sorted(events, key=lambda event: event.total_tokens, reverse=True)[:10]
-    non_cached_input_cost = _usd_from_million_tokens(
-        non_cached_input, NON_CACHED_INPUT_USD_PER_MILLION
+    estimated_total_cost = sum(
+        _estimated_cost_usd(
+            event.model,
+            event.input_tokens,
+            event.cached_input_tokens,
+            event.output_tokens,
+        )
+        for event in events
     )
-    cached_input_cost = _usd_from_million_tokens(
-        summary.cached_input_tokens, CACHED_INPUT_USD_PER_MILLION
-    )
-    output_cost = _usd_from_million_tokens(summary.output_tokens, OUTPUT_USD_PER_MILLION)
-    estimated_total_cost = non_cached_input_cost + cached_input_cost + output_cost
 
     if export_events_csv is not None:
         _write_events_csv(export_events_csv, events)
@@ -264,6 +398,18 @@ def cmd_summary(
             daily_input_tokens,
             daily_cached_tokens,
             daily_output_tokens,
+            daily_non_cached_input_cost,
+            daily_cached_input_cost,
+            daily_output_cost,
+            daily_estimated_cost,
+        )
+    if export_model_costs_csv is not None:
+        _write_model_costs_csv(
+            export_model_costs_csv,
+            model_non_cached_input_cost,
+            model_cached_input_cost,
+            model_output_cost,
+            model_estimated_cost,
         )
 
     report_lines: list[str] = []
@@ -295,20 +441,24 @@ def cmd_summary(
         f"(sum per-session total_token_usage): {_fmt_tokens(session_final_cumulative_total)}"
     )
     report_lines.append("")
-    report_lines.append("Worst-case API-equivalent estimate")
-    report_lines.append("(using GPT-5 top-tier public pricing)")
+    report_lines.append("API-equivalent estimate (model-based)")
+    report_lines.append("(using configured per-model pricing)")
     report_lines.append("")
-    report_lines.append(f"Non-cached input:   {_fmt_usd(non_cached_input_cost)}")
-    report_lines.append(f"Cached input:       {_fmt_usd(cached_input_cost)}")
-    report_lines.append(f"Output:             {_fmt_usd(output_cost)}")
+    report_lines.append(
+        f"Non-cached input:   {_fmt_usd(sum(model_non_cached_input_cost.values()))}"
+    )
+    report_lines.append(f"Cached input:       {_fmt_usd(sum(model_cached_input_cost.values()))}")
+    report_lines.append(f"Output:             {_fmt_usd(sum(model_output_cost.values()))}")
     report_lines.append("")
     report_lines.append(f"Estimated total:    {_fmt_usd(estimated_total_cost)}")
     report_lines.append("")
+    report_lines.append("Estimated cost by model")
+    for model, cost in sorted(model_estimated_cost.items(), key=lambda item: item[1], reverse=True):
+        report_lines.append(f"{model}: {_fmt_usd(cost)}")
+    report_lines.append("")
     report_lines.append("NOTE:")
     report_lines.append("This is NOT the real OpenAI infrastructure cost.")
-    report_lines.append(
-        "This is only a rough estimate using worst-case public API pricing."
-    )
+    report_lines.append("This is only a rough estimate using configured public API pricing.")
     report_lines.append("")
     report_lines.append("Event distribution")
     report_lines.append(f"Average tokens/event: {avg_tokens_per_event:,.1f}")
@@ -331,6 +481,14 @@ def cmd_summary(
     for model, total in sorted(model_total_tokens.items(), key=lambda item: item[1], reverse=True):
         report_lines.append(f"{model}: {_fmt_tokens(total)}")
     report_lines.append("")
+    report_lines.append("Breakdown by reasoning effort (usage estimate)")
+    for effort, total in sorted(effort_total_tokens.items(), key=lambda item: item[1], reverse=True):
+        report_lines.append(f"{effort}: {_fmt_tokens(total)}")
+    report_lines.append("")
+    report_lines.append("Breakdown by model + reasoning effort (usage estimate)")
+    for key, total in sorted(model_effort_total_tokens.items(), key=lambda item: item[1], reverse=True):
+        report_lines.append(f"{key}: {_fmt_tokens(total)}")
+    report_lines.append("")
     report_lines.append("Cache efficiency by day")
     for day in sorted(daily_input_tokens):
         report_lines.append(
@@ -342,6 +500,8 @@ def cmd_summary(
         report_lines.append(f"Events CSV: {export_events_csv}")
     if export_daily_csv is not None:
         report_lines.append(f"Daily CSV: {export_daily_csv}")
+    if export_model_costs_csv is not None:
+        report_lines.append(f"Model costs CSV: {export_model_costs_csv}")
 
     report_text = "\n".join(report_lines).rstrip() + "\n"
     print(report_text, end="")
@@ -362,6 +522,7 @@ def main() -> int:
             args.export_events_csv,
             args.export_daily_csv,
             args.save_report,
+            args.export_model_costs_csv,
         )
 
     parser.error(f"Unsupported command: {args.command}")

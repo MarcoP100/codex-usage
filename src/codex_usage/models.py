@@ -14,6 +14,7 @@ class TokenUsageEvent:
     total_tokens: int
     cumulative_total_tokens: int | None = None
     model: str | None = None
+    reasoning_effort: str | None = None
 
 
 @dataclass(frozen=True, slots=True)

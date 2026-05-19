@@ -1,6 +1,10 @@
 from __future__ import annotations
 
-from codex_usage.parser import parse_token_usage_event, parse_token_usage_event_with_status
+from codex_usage.parser import (
+    parse_token_usage_event,
+    parse_token_usage_event_with_status,
+    parse_turn_context_metadata,
+)
 from codex_usage.report import summarize
 
 
@@ -89,3 +93,25 @@ def test_parse_with_status_missing_token_fields() -> None:
     status, event = parse_token_usage_event_with_status(line)
     assert status == "missing_token_fields"
     assert event is None
+
+
+def test_parse_turn_context_metadata() -> None:
+    line = (
+        '{"timestamp":"2026-05-19T10:00:00Z","type":"turn_context",'
+        '"payload":{"model":"gpt-5.4","effort":"medium",'
+        '"collaboration_mode":{"settings":{"reasoning_effort":"high"}}}}'
+    )
+    model, effort = parse_turn_context_metadata(line)
+    assert model == "gpt-5.4"
+    assert effort == "medium"
+
+
+def test_parse_model_fallback_to_default_model_slug() -> None:
+    line = (
+        '{"timestamp":"2026-05-19T10:00:00Z","default_model_slug":"gpt-5.3-codex",'
+        '"payload":{"type":"token_count","input_tokens":7,"cached_input_tokens":3,'
+        '"output_tokens":5,"reasoning_output_tokens":2,"total_tokens":12}}'
+    )
+    event = parse_token_usage_event(line)
+    assert event is not None
+    assert event.model == "gpt-5.3-codex"
