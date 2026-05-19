@@ -160,3 +160,9 @@ Salva su file lo stesso report stampato a console.
 - Il tool legge solo i log presenti localmente nella cartella sessioni.
 - Se una sessione non è salvata nei file, non può essere conteggiata.
 - Token usati non equivalgono automaticamente al costo in valuta: per il costo servono modello, pricing e regole cache del periodo.
+
+
+codex-usage summary \
+  --save-report docs/summary.txt \
+  --export-events-csv docs/events.csv \
+  --export-daily-csv docs/daily_summary.csv
