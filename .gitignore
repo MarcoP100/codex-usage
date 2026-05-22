@@ -60,3 +60,4 @@ docs/perCodex.md
 Thumbs.db
 *.swp
 *.swo
+docs/*.db

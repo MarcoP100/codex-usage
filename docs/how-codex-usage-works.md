@@ -165,7 +165,8 @@ Salva su file lo stesso report stampato a console.
 codex-usage summary \
   --save-report docs/summary.txt \
   --export-events-csv docs/events.csv \
-  --export-daily-csv docs/daily_summary.csv
+  --export-daily-csv docs/daily_summary.csv \
+  --export-model-costs-csv docs\model_costs.csv
 
 
 codex-usage summary `

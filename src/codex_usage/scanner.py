@@ -23,9 +23,31 @@ def _resolve_default_sessions_dir() -> Path:
 DEFAULT_SESSIONS_DIR = _resolve_default_sessions_dir()
 
 
-def iter_session_files(base_dir: Path = DEFAULT_SESSIONS_DIR) -> Iterator[Path]:
+def _iter_jsonl_files(base_dir: Path) -> Iterator[Path]:
     if not base_dir.exists():
         return
     for path in sorted(base_dir.rglob("*.jsonl")):
         if path.is_file():
+            yield path
+
+
+def iter_session_files(
+    base_dir: Path = DEFAULT_SESSIONS_DIR,
+    include_archived_sessions: bool = False,
+) -> Iterator[Path]:
+    seen: set[Path] = set()
+    for path in _iter_jsonl_files(base_dir):
+        resolved = path.resolve()
+        if resolved not in seen:
+            seen.add(resolved)
+            yield path
+
+    if not include_archived_sessions:
+        return
+
+    archived_dir = base_dir.parent / "archived_sessions"
+    for path in _iter_jsonl_files(archived_dir):
+        resolved = path.resolve()
+        if resolved not in seen:
+            seen.add(resolved)
             yield path

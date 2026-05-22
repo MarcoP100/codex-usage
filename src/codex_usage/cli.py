@@ -6,9 +6,11 @@ import statistics
 from collections import defaultdict
 from pathlib import Path
 
+from codex_usage.config import load_app_config
+from codex_usage.db import import_token_events_to_sqlite
 from codex_usage.parser import parse_token_usage_event_with_status, parse_turn_context_metadata
 from codex_usage.report import summarize
-from codex_usage.scanner import DEFAULT_SESSIONS_DIR, iter_session_files
+from codex_usage.scanner import iter_session_files
 
 MODEL_PRICING_USD_PER_MILLION: dict[str, tuple[float, float, float]] = {
     "gpt-5.5": (5.0, 0.5, 30.0),
@@ -215,14 +217,25 @@ def _write_model_costs_csv(
 
 def _build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="codex-usage")
+    parser.add_argument(
+        "--config",
+        type=Path,
+        default=Path("config.toml"),
+        help="Optional TOML config path (default: ./config.toml if present)",
+    )
     subparsers = parser.add_subparsers(dest="command", required=True)
 
     summary_parser = subparsers.add_parser("summary", help="Show token usage summary")
     summary_parser.add_argument(
         "--sessions-dir",
         type=Path,
-        default=DEFAULT_SESSIONS_DIR,
+        default=None,
         help="Base directory containing .jsonl Codex session files",
+    )
+    summary_parser.add_argument(
+        "--include-archived-sessions",
+        action="store_true",
+        help="Include .jsonl files from sibling archived_sessions directory",
     )
     summary_parser.add_argument(
         "--export-events-csv",
@@ -244,11 +257,44 @@ def _build_parser() -> argparse.ArgumentParser:
         type=Path,
         help="Write estimated costs by model to this CSV file",
     )
+
+    import_parser = subparsers.add_parser(
+        "import-sqlite",
+        help="Import token events into a stable SQLite schema (idempotent)",
+    )
+    import_parser.add_argument(
+        "--sessions-dir",
+        type=Path,
+        default=None,
+        help="Base directory containing .jsonl Codex session files",
+    )
+    import_parser.add_argument(
+        "--include-archived-sessions",
+        action="store_true",
+        help="Include .jsonl files from sibling archived_sessions directory",
+    )
+    import_parser.add_argument(
+        "--db-path",
+        type=Path,
+        default=None,
+        help="Target SQLite database path",
+    )
+    import_parser.add_argument(
+        "--source-device",
+        type=str,
+        help="Optional source device label",
+    )
+    import_parser.add_argument(
+        "--source-account",
+        type=str,
+        help="Optional source account label",
+    )
     return parser
 
 
 def cmd_summary(
     sessions_dir: Path,
+    include_archived_sessions: bool,
     export_events_csv: Path | None,
     export_daily_csv: Path | None,
     save_report: Path | None,
@@ -280,7 +326,10 @@ def cmd_summary(
     model_cached_input_cost: dict[str, float] = defaultdict(float)
     model_output_cost: dict[str, float] = defaultdict(float)
 
-    for jsonl_path in iter_session_files(sessions_dir):
+    for jsonl_path in iter_session_files(
+        sessions_dir,
+        include_archived_sessions=include_archived_sessions,
+    ):
         files_scanned += 1
         file_events = []
         current_model: str | None = None
@@ -515,15 +564,39 @@ def cmd_summary(
 def main() -> int:
     parser = _build_parser()
     args = parser.parse_args()
+    config = load_app_config(args.config)
 
     if args.command == "summary":
         return cmd_summary(
-            args.sessions_dir,
+            args.sessions_dir or config.sessions_dir,
+            args.include_archived_sessions or config.include_archived_sessions,
             args.export_events_csv,
             args.export_daily_csv,
             args.save_report,
             args.export_model_costs_csv,
         )
+    if args.command == "import-sqlite":
+        source_device = args.source_device or config.source_device
+        source_account = args.source_account or config.source_account
+        result = import_token_events_to_sqlite(
+            db_path=args.db_path or config.sqlite_db_path,
+            sessions_dir=args.sessions_dir or config.sessions_dir,
+            include_archived_sessions=(
+                args.include_archived_sessions or config.include_archived_sessions
+            ),
+            source_device=source_device,
+            source_account=source_account,
+            pricing=MODEL_PRICING_USD_PER_MILLION,
+            default_pricing=DEFAULT_PRICING_USD_PER_MILLION,
+        )
+        print(f"DB: {args.db_path or config.sqlite_db_path}")
+        print(f"Files scanned: {result['files_scanned']}")
+        print(f"Lines scanned: {result['lines_scanned']}")
+        print(f"Inserted raw events: {result['raw_inserted']}")
+        print(f"Skipped raw duplicates: {result['raw_skipped_duplicate']}")
+        print(f"Inserted token events: {result['token_inserted']}")
+        print(f"Skipped token duplicates: {result['token_skipped_duplicate']}")
+        return 0
 
     parser.error(f"Unsupported command: {args.command}")
     return 2
