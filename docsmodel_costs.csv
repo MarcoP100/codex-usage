@@ -1,4 +1,0 @@
-model,estimated_non_cached_input_cost,estimated_cached_input_cost,estimated_output_cost,estimated_cost
-gpt-5.4,154.264840,139.943584,33.968355,328.176779
-gpt-5.5,69.781380,72.388864,14.221440,156.391684
-gpt-5.3-codex,12.453695,16.123498,6.006756,34.583948

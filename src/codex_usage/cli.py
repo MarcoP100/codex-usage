@@ -54,6 +54,16 @@ def _day_key(value) -> str:
     return value.date().isoformat()
 
 
+def _repo_key_from_cwd(cwd: str | None) -> str:
+    if cwd is None:
+        return "unknown"
+    trimmed = cwd.strip().rstrip("\\/")
+    if not trimmed:
+        return "unknown"
+    normalized = trimmed.replace("\\", "/")
+    return normalized.split("/")[-1] or "unknown"
+
+
 def _estimated_cost_usd(
     model: str | None,
     input_tokens: int,
@@ -215,6 +225,57 @@ def _write_model_costs_csv(
             )
 
 
+def _write_repo_csv(
+    path: Path,
+    repo_events: dict[str, int],
+    repo_input_tokens: dict[str, int],
+    repo_cached_tokens: dict[str, int],
+    repo_output_tokens: dict[str, int],
+    repo_non_cached_cost: dict[str, float],
+    repo_cached_cost: dict[str, float],
+    repo_output_cost: dict[str, float],
+    repo_total_cost: dict[str, float],
+) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with path.open("w", newline="", encoding="utf-8") as handle:
+        writer = csv.writer(handle)
+        writer.writerow(
+            [
+                "repository",
+                "events",
+                "input_tokens",
+                "cached_input_tokens",
+                "non_cached_input_tokens",
+                "output_tokens",
+                "estimated_non_cached_input_cost",
+                "estimated_cached_input_cost",
+                "estimated_output_cost",
+                "estimated_cost",
+            ]
+        )
+        for repo in sorted(
+            repo_events,
+            key=lambda item: repo_total_cost[item],
+            reverse=True,
+        ):
+            input_tokens = repo_input_tokens[repo]
+            cached_tokens = repo_cached_tokens[repo]
+            writer.writerow(
+                [
+                    repo,
+                    repo_events[repo],
+                    input_tokens,
+                    cached_tokens,
+                    input_tokens - cached_tokens,
+                    repo_output_tokens[repo],
+                    f"{repo_non_cached_cost[repo]:.6f}",
+                    f"{repo_cached_cost[repo]:.6f}",
+                    f"{repo_output_cost[repo]:.6f}",
+                    f"{repo_total_cost[repo]:.6f}",
+                ]
+            )
+
+
 def _build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="codex-usage")
     parser.add_argument(
@@ -256,6 +317,11 @@ def _build_parser() -> argparse.ArgumentParser:
         "--export-model-costs-csv",
         type=Path,
         help="Write estimated costs by model to this CSV file",
+    )
+    summary_parser.add_argument(
+        "--export-repo-csv",
+        type=Path,
+        help="Write usage and estimated costs aggregated by repository to this CSV file",
     )
 
     import_parser = subparsers.add_parser(
@@ -299,6 +365,7 @@ def cmd_summary(
     export_daily_csv: Path | None,
     save_report: Path | None,
     export_model_costs_csv: Path | None,
+    export_repo_csv: Path | None,
 ) -> int:
     events = []
     files_scanned = 0
@@ -325,6 +392,14 @@ def cmd_summary(
     model_non_cached_input_cost: dict[str, float] = defaultdict(float)
     model_cached_input_cost: dict[str, float] = defaultdict(float)
     model_output_cost: dict[str, float] = defaultdict(float)
+    repo_events: dict[str, int] = defaultdict(int)
+    repo_input_tokens: dict[str, int] = defaultdict(int)
+    repo_cached_tokens: dict[str, int] = defaultdict(int)
+    repo_output_tokens: dict[str, int] = defaultdict(int)
+    repo_non_cached_cost: dict[str, float] = defaultdict(float)
+    repo_cached_cost: dict[str, float] = defaultdict(float)
+    repo_output_cost: dict[str, float] = defaultdict(float)
+    repo_total_cost: dict[str, float] = defaultdict(float)
 
     for jsonl_path in iter_session_files(
         sessions_dir,
@@ -334,14 +409,17 @@ def cmd_summary(
         file_events = []
         current_model: str | None = None
         current_effort: str | None = None
+        current_cwd: str | None = None
         with jsonl_path.open("r", encoding="utf-8") as handle:
             for line in handle:
                 lines_scanned += 1
-                turn_model, turn_effort = parse_turn_context_metadata(line)
+                turn_model, turn_effort, turn_cwd = parse_turn_context_metadata(line)
                 if turn_model:
                     current_model = turn_model
                 if turn_effort:
                     current_effort = turn_effort
+                if turn_cwd:
+                    current_cwd = turn_cwd
                 status, event = parse_token_usage_event_with_status(line)
                 if status == "malformed_json":
                     malformed_json_lines += 1
@@ -356,7 +434,7 @@ def cmd_summary(
                     continue
                 if (event.model is None and current_model is not None) or (
                     event.reasoning_effort is None and current_effort is not None
-                ):
+                ) or (event.workspace_cwd is None and current_cwd is not None):
                     event = event.__class__(
                         timestamp=event.timestamp,
                         input_tokens=event.input_tokens,
@@ -367,6 +445,20 @@ def cmd_summary(
                         cumulative_total_tokens=event.cumulative_total_tokens,
                         model=event.model or current_model,
                         reasoning_effort=event.reasoning_effort or current_effort,
+                        workspace_cwd=event.workspace_cwd or current_cwd,
+                    )
+                elif event.workspace_cwd is None and current_cwd is not None:
+                    event = event.__class__(
+                        timestamp=event.timestamp,
+                        input_tokens=event.input_tokens,
+                        cached_input_tokens=event.cached_input_tokens,
+                        output_tokens=event.output_tokens,
+                        reasoning_output_tokens=event.reasoning_output_tokens,
+                        total_tokens=event.total_tokens,
+                        cumulative_total_tokens=event.cumulative_total_tokens,
+                        model=event.model,
+                        reasoning_effort=event.reasoning_effort,
+                        workspace_cwd=current_cwd,
                     )
                 dedupe_key = (
                     event.timestamp.isoformat(),
@@ -415,6 +507,15 @@ def cmd_summary(
             model_non_cached_input_cost[model_key] += non_cached_cost
             model_cached_input_cost[model_key] += cached_cost
             model_output_cost[model_key] += output_cost
+            repo_key = _repo_key_from_cwd(event.workspace_cwd)
+            repo_events[repo_key] += 1
+            repo_input_tokens[repo_key] += event.input_tokens
+            repo_cached_tokens[repo_key] += event.cached_input_tokens
+            repo_output_tokens[repo_key] += event.output_tokens
+            repo_non_cached_cost[repo_key] += non_cached_cost
+            repo_cached_cost[repo_key] += cached_cost
+            repo_output_cost[repo_key] += output_cost
+            repo_total_cost[repo_key] += event_estimated_cost
 
     summary = summarize(events)
     non_cached_input = summary.input_tokens - summary.cached_input_tokens
@@ -459,6 +560,18 @@ def cmd_summary(
             model_cached_input_cost,
             model_output_cost,
             model_estimated_cost,
+        )
+    if export_repo_csv is not None:
+        _write_repo_csv(
+            export_repo_csv,
+            repo_events,
+            repo_input_tokens,
+            repo_cached_tokens,
+            repo_output_tokens,
+            repo_non_cached_cost,
+            repo_cached_cost,
+            repo_output_cost,
+            repo_total_cost,
         )
 
     report_lines: list[str] = []
@@ -538,6 +651,13 @@ def cmd_summary(
     for key, total in sorted(model_effort_total_tokens.items(), key=lambda item: item[1], reverse=True):
         report_lines.append(f"{key}: {_fmt_tokens(total)}")
     report_lines.append("")
+    report_lines.append("Breakdown by repository")
+    for repo, events_count in sorted(repo_events.items(), key=lambda item: repo_total_cost[item[0]], reverse=True):
+        report_lines.append(
+            f"{repo}: events={events_count:,} tokens={_fmt_tokens(repo_input_tokens[repo] + repo_output_tokens[repo])} "
+            f"cost={_fmt_usd(repo_total_cost[repo])}"
+        )
+    report_lines.append("")
     report_lines.append("Cache efficiency by day")
     for day in sorted(daily_input_tokens):
         report_lines.append(
@@ -551,6 +671,8 @@ def cmd_summary(
         report_lines.append(f"Daily CSV: {export_daily_csv}")
     if export_model_costs_csv is not None:
         report_lines.append(f"Model costs CSV: {export_model_costs_csv}")
+    if export_repo_csv is not None:
+        report_lines.append(f"Repo CSV: {export_repo_csv}")
 
     report_text = "\n".join(report_lines).rstrip() + "\n"
     print(report_text, end="")
@@ -574,6 +696,7 @@ def main() -> int:
             args.export_daily_csv,
             args.save_report,
             args.export_model_costs_csv,
+            args.export_repo_csv,
         )
     if args.command == "import-sqlite":
         source_device = args.source_device or config.source_device

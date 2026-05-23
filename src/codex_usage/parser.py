@@ -128,18 +128,18 @@ def parse_token_usage_event(line: str) -> TokenUsageEvent | None:
     return event
 
 
-def parse_turn_context_metadata(line: str) -> tuple[str | None, str | None]:
+def parse_turn_context_metadata(line: str) -> tuple[str | None, str | None, str | None]:
     try:
         payload = json.loads(line)
     except json.JSONDecodeError:
-        return (None, None)
+        return (None, None, None)
     if not isinstance(payload, dict):
-        return (None, None)
+        return (None, None, None)
     if payload.get("type") != "turn_context":
-        return (None, None)
+        return (None, None, None)
     event_payload = payload.get("payload")
     if not isinstance(event_payload, dict):
-        return (None, None)
+        return (None, None, None)
 
     model_candidates = (
         event_payload.get("model"),
@@ -171,7 +171,8 @@ def parse_turn_context_metadata(line: str) -> tuple[str | None, str | None]:
         if isinstance(candidate, str) and candidate:
             effort = candidate
             break
-    return (model, effort)
+    cwd = event_payload.get("cwd") if isinstance(event_payload.get("cwd"), str) else None
+    return (model, effort, cwd)
 
 
 def iter_events_from_file(path: Path) -> Iterator[TokenUsageEvent]:

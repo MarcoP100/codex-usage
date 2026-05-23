@@ -1,6 +1,6 @@
 ﻿[app]
 # Usa la copia locale per lavorare in sicurezza
-sessions_dir = "C:/Users/marco/.codex - Copia/sessions"
+#sessions_dir = "C:/Users/marco/.codex - Copia/sessions"
 include_archived_sessions = true
 
 # DB locale del progetto

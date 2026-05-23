@@ -189,7 +189,7 @@ def import_token_events_to_sqlite(
                     else:
                         raw_skipped_duplicate += 1
 
-                    turn_model, turn_effort = parse_turn_context_metadata(line)
+                    turn_model, turn_effort, _turn_cwd = parse_turn_context_metadata(line)
                     if turn_model:
                         current_model = turn_model
                     if turn_effort:

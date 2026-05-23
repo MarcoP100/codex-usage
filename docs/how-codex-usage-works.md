@@ -1,35 +1,27 @@
-# How `codex-usage` Works
+﻿# How `codex-usage` Works
 
-Questo documento descrive cosa legge il programma, come interpreta i dati, quali metriche calcola e come gestisce duplicati o righe non valide.
+Questa guida descrive il funzionamento attuale del tool e include comandi pronti da copiare.
 
 ## 1) Sorgente dati
 
-La CLI legge tutti i file `*.jsonl` sotto:
+Il tool legge file `*.jsonl` dalle sessioni Codex.
 
-- default: `~/.codex/sessions`
-- opzionale: percorso passato con `--sessions-dir`
+- Directory base: `sessions_dir` (da `config.toml` o `--sessions-dir`)
+- Opzionale: include anche `archived_sessions` (da `config.toml` o `--include-archived-sessions`)
 
-Ogni riga è trattata come un record JSON indipendente.
+Se usi `config.toml`, non serve passare i path ogni volta.
 
-## 2) Quali eventi vengono considerati
+## 2) Eventi considerati per i token
 
-Il parser tiene solo le righe dove:
+Per le metriche token vengono usati solo gli eventi `payload.type == "token_count"`.
 
-- il JSON è valido
-- esiste `payload` come oggetto
-- `payload.type == "token_count"`
+Per ogni evento token:
 
-Tutto il resto viene ignorato ai fini dei token.
+1. `payload.info.last_token_usage` (prioritario)
+2. `payload.info.total_token_usage` (fallback)
+3. campi token direttamente in `payload` (fallback)
 
-## 3) Dove prende i token
-
-Per ogni evento `token_count`, i campi token vengono letti con questa priorità:
-
-1. `payload.info.last_token_usage` (preferito: uso incrementale dell'evento)
-2. `payload.info.total_token_usage` (fallback: cumulato)
-3. direttamente in `payload` (compatibilità con formati più vecchi/diversi)
-
-Campi letti:
+Campi principali:
 
 - `input_tokens`
 - `cached_input_tokens`
@@ -37,140 +29,117 @@ Campi letti:
 - `reasoning_output_tokens`
 - `total_tokens`
 
-Il timestamp viene letto da:
+Timestamp (ordine):
 
 1. `timestamp`
 2. `created_at`
 3. `payload.timestamp`
 
-## 4) Classificazione righe non valide
+## 3) Metadati aggiuntivi
 
-Durante la scansione, ogni riga può finire in una categoria:
+Il tool arricchisce gli eventi token con metadati trovati nei `turn_context` dello stesso file:
 
-- `malformed_json`: la riga non è JSON parseabile
-- `missing_payload_type`: manca `payload`, `payload` non è oggetto, manca timestamp valido, o struttura base non sufficiente
-- `missing_token_fields`: è `token_count` ma i campi token richiesti non ci sono nel blocco scelto
-- `not_token_event`: evento valido ma non di tipo `token_count` (non contato come errore)
-- `valid`: evento usabile
+- `model`
+- `reasoning_effort`
+- `cwd` (usato per report per repository)
 
-Nel report qualità vengono mostrati i conteggi principali.
+## 4) Costi stimati
 
-## 5) Deduplica eventi
+I costi sono calcolati per modello:
 
-Prima di aggiungere un evento valido alle statistiche, viene applicata deduplica con chiave:
+- `gpt-5.5`: input `5.00`, cached `0.50`, output `30.00`
+- `gpt-5.4`: input `2.50`, cached `0.25`, output `15.00`
+- `gpt-5.4-mini`: input `0.75`, cached `0.075`, output `4.50`
+- `gpt-5.3-codex`: input `1.75`, cached `0.175`, output `14.00`
 
-- `(timestamp.isoformat(), total_tokens, input_tokens, output_tokens)`
+Unità: USD per 1M token.
 
-Se la stessa chiave è già stata vista:
+## 5) Output disponibili
 
-- evento scartato
-- `Duplicate events skipped` incrementato
+### Report console / file
 
-Perché questa scelta:
+Sezioni principali:
 
-- semplice e veloce
-- intercetta bene retry/append duplicati
-- evita complessità non necessaria nel v0.1
+- Data quality
+- Token totals
+- Costi (totale e per area)
+- Breakdown per giorno
+- Breakdown per modello
+- Breakdown per effort
+- Breakdown per modello+effort
+- Breakdown per repository
 
-Limite noto:
+### CSV export
 
-- due eventi realmente diversi ma con stessa quadrupla potrebbero collidere (raro, ma possibile).
+- `--export-events-csv`: dettaglio per evento
+- `--export-daily-csv`: aggregato giornaliero
+- `--export-model-costs-csv`: costi per modello
+- `--export-repo-csv`: aggregato per repository
 
-## 6) Cosa calcola il report
+## 6) Import SQLite
 
-## Data quality
+Comando `import-sqlite`:
 
-- `Files scanned`: numero file `.jsonl` letti
-- `Lines scanned`: numero righe totali processate
-- `Valid token events`: eventi `token_count` validi dopo deduplica
-- `Malformed JSON lines`: righe non parseabili
-- `Missing payload/type`: righe con struttura base insufficiente
-- `Missing token fields`: eventi `token_count` incompleti
-- `Duplicate events skipped`: eventi validi scartati perché duplicati
+- salva `raw_events` (tutte le righe JSONL)
+- salva `token_events` (eventi token normalizzati)
+- idempotente via `raw_event_hash` (no duplicati su re-import)
 
-## Token totals
+## 7) Esempi copy/paste
 
-- `Input tokens`
-- `Cached input tokens`
-- `Non-cached input = input - cached_input`
-- `Output tokens`
-- `Reasoning tokens`
-- `Cache ratio = cached_input / input`
-- `Effective new tokens estimate = (input - cached_input) + output + reasoning`
+### A) Summary usando `config.toml` (consigliato)
 
-In più:
+```powershell
+$env:PYTHONPATH='src'
+python -m codex_usage.cli --config config.toml summary `
+  --save-report docs\summary.txt `
+  --export-events-csv docs\events.csv `
+  --export-daily-csv docs\daily_summary.csv `
+  --export-model-costs-csv docs\model_costs.csv `
+  --export-repo-csv docs\repo_summary.csv
+```
 
-- `Usage tokens estimate (sum last_token_usage)`: somma `total_tokens` degli eventi validi (stima consumo)
-- `Session final cumulative total (sum per-session total_token_usage)`: per ogni file/sessione prende l'ultimo cumulato e li somma
+### B) Summary senza config (PowerShell)
 
-Nota importante:
+```powershell
+$env:PYTHONPATH='src'
+python -m codex_usage.cli summary `
+  --sessions-dir "C:\Users\marco\.codex - Copia\sessions" `
+  --include-archived-sessions `
+  --save-report docs\summary.txt `
+  --export-events-csv docs\events.csv `
+  --export-daily-csv docs\daily_summary.csv `
+  --export-model-costs-csv docs\model_costs.csv `
+  --export-repo-csv docs\repo_summary.csv
+```
 
-- la metrica più utile per "quanto ho usato" è in genere `Usage tokens estimate`
-- il cumulato finale per sessione è utile per confronto, ma misura qualcosa di diverso
+### C) Summary senza config (Linux/macOS)
 
-## Breakdown by day
-
-Per giorno (`YYYY-MM-DD`) somma i `total_tokens` degli eventi validi deduplicati.
-
-## Breakdown by model
-
-Prova a estrarre il modello da:
-
-1. `payload.model`
-2. root `model`
-3. `payload.info.model`
-4. root `model_slug`
-
-Se non trova nulla usa `unknown`.
-
-## Cache efficiency by day
-
-Per ciascun giorno:
-
-- `cached_input_tokens / input_tokens`
-
-Mostra anche numeratore/denominatore raw.
-
-## Event distribution
-
-- `Average tokens/event`: media di `total_tokens` sugli eventi validi deduplicati
-- `Median tokens/event`: mediana di `total_tokens`
-- `Top 10 heaviest events`: eventi con `total_tokens` più alto, con timestamp/modello e dettaglio campi token
-
-## 7) Export
-
-## Event CSV (`--export-events-csv`)
-
-Una riga per evento valido deduplicato:
-
-- `timestamp,model,input_tokens,cached_input_tokens,output_tokens,reasoning_tokens,total_tokens`
-
-## Daily CSV (`--export-daily-csv`)
-
-Una riga per giorno:
-
-- `date,events,input_tokens,non_cached_tokens,output_tokens,cache_ratio`
-
-## Text report (`--save-report`)
-
-Salva su file lo stesso report stampato a console.
-
-## 8) Limiti e interpretazione
-
-- Il tool legge solo i log presenti localmente nella cartella sessioni.
-- Se una sessione non è salvata nei file, non può essere conteggiata.
-- Token usati non equivalgono automaticamente al costo in valuta: per il costo servono modello, pricing e regole cache del periodo.
-
-
-codex-usage summary \
+```bash
+PYTHONPATH=src python -m codex_usage.cli summary \
+  --sessions-dir "$HOME/.codex/sessions" \
+  --include-archived-sessions \
   --save-report docs/summary.txt \
   --export-events-csv docs/events.csv \
   --export-daily-csv docs/daily_summary.csv \
-  --export-model-costs-csv docs\model_costs.csv
+  --export-model-costs-csv docs/model_costs.csv \
+  --export-repo-csv docs/repo_summary.csv
+```
 
+### D) Import SQLite usando `config.toml`
 
-codex-usage summary `
-  --sessions-dir C:\Users\marco\.codex\sessions `
-  --export-events-csv docs\events.csv `
-  --export-daily-csv docs\daily_summary.csv `
-  --export-model-costs-csv docs\model_costs.csv
+```powershell
+$env:PYTHONPATH='src'
+python -m codex_usage.cli --config config.toml import-sqlite
+```
+
+### E) Import SQLite senza config (PowerShell)
+
+```powershell
+$env:PYTHONPATH='src'
+python -m codex_usage.cli import-sqlite `
+  --sessions-dir "C:\Users\marco\.codex - Copia\sessions" `
+  --include-archived-sessions `
+  --db-path docs\codex_usage.db `
+  --source-device windows-main `
+  --source-account marco
+```

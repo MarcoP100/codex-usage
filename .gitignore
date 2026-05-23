@@ -51,6 +51,7 @@ tmp/
 # Generated reports
 docs/*.csv
 docs/*.txt
+*.csv
 
 # Local request notes
 docs/perCodex.md

@@ -98,12 +98,13 @@ def test_parse_with_status_missing_token_fields() -> None:
 def test_parse_turn_context_metadata() -> None:
     line = (
         '{"timestamp":"2026-05-19T10:00:00Z","type":"turn_context",'
-        '"payload":{"model":"gpt-5.4","effort":"medium",'
+        '"payload":{"model":"gpt-5.4","effort":"medium","cwd":"C:/repo/test",'
         '"collaboration_mode":{"settings":{"reasoning_effort":"high"}}}}'
     )
-    model, effort = parse_turn_context_metadata(line)
+    model, effort, cwd = parse_turn_context_metadata(line)
     assert model == "gpt-5.4"
     assert effort == "medium"
+    assert cwd == "C:/repo/test"
 
 
 def test_parse_model_fallback_to_default_model_slug() -> None:
