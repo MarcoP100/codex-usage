@@ -59,12 +59,22 @@ Report con export principali:
 ```powershell
 $env:PYTHONPATH='src'
 python -m codex_usage.cli --config config.toml summary `
-  --save-report docs\summary.txt `
-  --export-events-csv docs\events.csv `
-  --export-daily-csv docs\daily_summary.csv `
-  --export-model-costs-csv docs\model_costs.csv `
-  --export-repo-csv docs\repo_summary.csv
+  --save-report reports\summary.txt `
+  --export-events-csv reports\events.csv `
+  --export-daily-csv reports\daily_summary.csv `
+  --export-model-costs-csv reports\model_costs.csv `
+  --export-repo-csv reports\repo_summary.csv
 ```
+
+## Organizzazione file
+
+- `docs/`: documentazione del progetto.
+- `data/`: database SQLite locale e altri dati generati.
+- `reports/`: report testuali e CSV generati dalla CLI.
+- `src/`: codice applicativo.
+- `tests/`: test automatici.
+
+Per lavorare in sicurezza puoi puntare `sessions_dir` a una copia locale delle sessioni Codex, come nel `config.toml` usato in questo progetto.
 
 ## Output
 

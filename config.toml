@@ -1,10 +1,10 @@
 ﻿[app]
 # Usa la copia locale per lavorare in sicurezza
-#sessions_dir = "C:/Users/marco/.codex - Copia/sessions"
+sessions_dir = "C:/Users/marco/.codex - Copia/sessions"
 include_archived_sessions = true
 
 # DB locale del progetto
-sqlite_db_path = "docs/codex_usage.db"
+sqlite_db_path = "data/codex_usage.db"
 
 # Metadata facoltativi per import
 source_device = "windows-main"

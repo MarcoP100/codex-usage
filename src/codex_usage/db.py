@@ -10,6 +10,7 @@ from typing import Any
 
 from codex_usage.models import TokenUsageEvent
 from codex_usage.parser import parse_token_usage_event_with_status, parse_turn_context_metadata
+from codex_usage.repository import repository_key_from_cwd
 from codex_usage.scanner import iter_session_files
 
 
@@ -80,6 +81,8 @@ def _create_schema(conn: sqlite3.Connection) -> None:
             timestamp TEXT NOT NULL,
             model TEXT,
             reasoning_effort TEXT,
+            workspace_cwd TEXT,
+            repository TEXT NOT NULL,
             input_tokens INTEGER NOT NULL,
             cached_input_tokens INTEGER NOT NULL,
             non_cached_input_tokens INTEGER NOT NULL,
@@ -105,6 +108,24 @@ def _create_schema(conn: sqlite3.Connection) -> None:
     conn.execute(
         "CREATE INDEX IF NOT EXISTS idx_token_events_model ON token_events(model)"
     )
+    _ensure_column(conn, "token_events", "workspace_cwd", "TEXT")
+    _ensure_column(conn, "token_events", "repository", "TEXT NOT NULL DEFAULT 'unknown'")
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_token_events_repository ON token_events(repository)"
+    )
+
+
+def _ensure_column(
+    conn: sqlite3.Connection,
+    table_name: str,
+    column_name: str,
+    column_definition: str,
+) -> None:
+    existing_columns = {
+        row[1] for row in conn.execute(f"PRAGMA table_info({table_name})").fetchall()
+    }
+    if column_name not in existing_columns:
+        conn.execute(f"ALTER TABLE {table_name} ADD COLUMN {column_name} {column_definition}")
 
 
 def _cost_components_usd(
@@ -146,6 +167,10 @@ def import_token_events_to_sqlite(
         token_skipped_duplicate = 0
         files_scanned = 0
         lines_scanned = 0
+        malformed_json_lines = 0
+        missing_payload_type = 0
+        missing_token_fields = 0
+        non_token_events = 0
 
         for session_file in iter_session_files(
             sessions_dir,
@@ -154,6 +179,7 @@ def import_token_events_to_sqlite(
             files_scanned += 1
             current_model: str | None = None
             current_effort: str | None = None
+            current_cwd: str | None = None
             relative_session_file = _relative_session_file(sessions_dir, session_file)
 
             with session_file.open("r", encoding="utf-8") as handle:
@@ -189,17 +215,35 @@ def import_token_events_to_sqlite(
                     else:
                         raw_skipped_duplicate += 1
 
-                    turn_model, turn_effort, _turn_cwd = parse_turn_context_metadata(line)
+                    turn_model, turn_effort, turn_cwd = parse_turn_context_metadata(line)
                     if turn_model:
                         current_model = turn_model
                     if turn_effort:
                         current_effort = turn_effort
+                    if turn_cwd:
+                        current_cwd = turn_cwd
 
                     status, event = parse_token_usage_event_with_status(line)
+                    if status == "malformed_json":
+                        malformed_json_lines += 1
+                        continue
+                    if status == "missing_payload_type":
+                        missing_payload_type += 1
+                        continue
+                    if status == "missing_token_fields":
+                        missing_token_fields += 1
+                        continue
+                    if status == "not_token_event":
+                        non_token_events += 1
+                        continue
                     if status != "valid" or event is None:
                         continue
 
-                    if event.model is None and current_model is not None:
+                    if (
+                        event.model is None
+                        or event.reasoning_effort is None
+                        or event.workspace_cwd is None
+                    ):
                         event = TokenUsageEvent(
                             timestamp=event.timestamp,
                             input_tokens=event.input_tokens,
@@ -208,23 +252,13 @@ def import_token_events_to_sqlite(
                             reasoning_output_tokens=event.reasoning_output_tokens,
                             total_tokens=event.total_tokens,
                             cumulative_total_tokens=event.cumulative_total_tokens,
-                            model=current_model,
+                            model=event.model or current_model,
                             reasoning_effort=event.reasoning_effort or current_effort,
-                        )
-                    elif event.reasoning_effort is None and current_effort is not None:
-                        event = TokenUsageEvent(
-                            timestamp=event.timestamp,
-                            input_tokens=event.input_tokens,
-                            cached_input_tokens=event.cached_input_tokens,
-                            output_tokens=event.output_tokens,
-                            reasoning_output_tokens=event.reasoning_output_tokens,
-                            total_tokens=event.total_tokens,
-                            cumulative_total_tokens=event.cumulative_total_tokens,
-                            model=event.model,
-                            reasoning_effort=current_effort,
+                            workspace_cwd=event.workspace_cwd or current_cwd,
                         )
 
                     non_cached = event.input_tokens - event.cached_input_tokens
+                    repository = repository_key_from_cwd(event.workspace_cwd)
                     non_cached_cost, cached_cost, output_cost = _cost_components_usd(
                         event.model,
                         event.input_tokens,
@@ -239,10 +273,11 @@ def import_token_events_to_sqlite(
                         """
                         INSERT OR IGNORE INTO token_events (
                             event_id, source_device, source_account, session_file, timestamp,
-                            model, reasoning_effort, input_tokens, cached_input_tokens,
+                            model, reasoning_effort, workspace_cwd, repository,
+                            input_tokens, cached_input_tokens,
                             non_cached_input_tokens, output_tokens, reasoning_output_tokens,
                             total_tokens, estimated_cost_usd, raw_event_hash, imported_at
-                        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                         """,
                         (
                             str(uuid.uuid4()),
@@ -252,6 +287,8 @@ def import_token_events_to_sqlite(
                             event.timestamp.isoformat(),
                             event.model,
                             event.reasoning_effort,
+                            event.workspace_cwd,
+                            repository,
                             event.input_tokens,
                             event.cached_input_tokens,
                             non_cached,
@@ -276,6 +313,10 @@ def import_token_events_to_sqlite(
             "raw_skipped_duplicate": raw_skipped_duplicate,
             "token_inserted": token_inserted,
             "token_skipped_duplicate": token_skipped_duplicate,
+            "malformed_json_lines": malformed_json_lines,
+            "missing_payload_type": missing_payload_type,
+            "missing_token_fields": missing_token_fields,
+            "non_token_events": non_token_events,
             # backward-compat keys
             "inserted": token_inserted,
             "skipped_duplicate": token_skipped_duplicate,

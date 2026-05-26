@@ -47,10 +47,14 @@ pip-delete-this-directory.txt
 
 # Local temp/output
 tmp/
+data/
+reports/
 
 # Generated reports
 docs/*.csv
 docs/*.txt
+reports/*.csv
+reports/*.txt
 *.csv
 
 # Local request notes
@@ -62,3 +66,4 @@ Thumbs.db
 *.swp
 *.swo
 docs/*.db
+data/*.db

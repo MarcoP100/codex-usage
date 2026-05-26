@@ -9,6 +9,7 @@ from pathlib import Path
 from codex_usage.config import load_app_config
 from codex_usage.db import import_token_events_to_sqlite
 from codex_usage.parser import parse_token_usage_event_with_status, parse_turn_context_metadata
+from codex_usage.repository import repository_key_from_cwd
 from codex_usage.report import summarize
 from codex_usage.scanner import iter_session_files
 
@@ -52,16 +53,6 @@ def _fmt_usd(value: float) -> str:
 
 def _day_key(value) -> str:
     return value.date().isoformat()
-
-
-def _repo_key_from_cwd(cwd: str | None) -> str:
-    if cwd is None:
-        return "unknown"
-    trimmed = cwd.strip().rstrip("\\/")
-    if not trimmed:
-        return "unknown"
-    normalized = trimmed.replace("\\", "/")
-    return normalized.split("/")[-1] or "unknown"
 
 
 def _estimated_cost_usd(
@@ -507,7 +498,7 @@ def cmd_summary(
             model_non_cached_input_cost[model_key] += non_cached_cost
             model_cached_input_cost[model_key] += cached_cost
             model_output_cost[model_key] += output_cost
-            repo_key = _repo_key_from_cwd(event.workspace_cwd)
+            repo_key = repository_key_from_cwd(event.workspace_cwd)
             repo_events[repo_key] += 1
             repo_input_tokens[repo_key] += event.input_tokens
             repo_cached_tokens[repo_key] += event.cached_input_tokens
@@ -715,6 +706,10 @@ def main() -> int:
         print(f"DB: {args.db_path or config.sqlite_db_path}")
         print(f"Files scanned: {result['files_scanned']}")
         print(f"Lines scanned: {result['lines_scanned']}")
+        print(f"Malformed JSON lines: {result['malformed_json_lines']}")
+        print(f"Missing payload/type: {result['missing_payload_type']}")
+        print(f"Missing token fields: {result['missing_token_fields']}")
+        print(f"Non-token events: {result['non_token_events']}")
         print(f"Inserted raw events: {result['raw_inserted']}")
         print(f"Skipped raw duplicates: {result['raw_skipped_duplicate']}")
         print(f"Inserted token events: {result['token_inserted']}")

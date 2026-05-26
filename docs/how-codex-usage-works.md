@@ -11,6 +11,14 @@ Il tool legge file `*.jsonl` dalle sessioni Codex.
 
 Se usi `config.toml`, non serve passare i path ogni volta.
 
+Convenzione consigliata nel repository:
+
+- `docs/`: solo documentazione;
+- `data/`: database SQLite locale;
+- `reports/`: report testuali e CSV generati.
+
+Per lavorare in sicurezza puoi impostare `sessions_dir` verso una copia locale delle sessioni, ad esempio `C:/Users/marco/.codex - Copia/sessions`.
+
 ## 2) Eventi considerati per i token
 
 Per le metriche token vengono usati solo gli eventi `payload.type == "token_count"`.
@@ -73,6 +81,15 @@ Sezioni principali:
 - Breakdown per modello+effort
 - Breakdown per repository
 
+Nel report console la deduplica degli eventi token usa questa chiave:
+
+- `timestamp`
+- `total_tokens`
+- `input_tokens`
+- `output_tokens`
+
+Questa regola evita doppi conteggi evidenti nel report aggregato, anche quando due righe token equivalenti compaiono nei file letti.
+
 ### CSV export
 
 - `--export-events-csv`: dettaglio per evento
@@ -86,7 +103,17 @@ Comando `import-sqlite`:
 
 - salva `raw_events` (tutte le righe JSONL)
 - salva `token_events` (eventi token normalizzati)
+- salva `workspace_cwd` e `repository` sugli eventi token quando ricavati da `turn_context`
 - idempotente via `raw_event_hash` (no duplicati su re-import)
+
+L'import SQLite deduplica a livello di riga raw normalizzata (`raw_event_hash`). Questo conserva una relazione verificabile tra evento grezzo e token normalizzato.
+
+L'import espone anche contatori di qualita' dati:
+
+- righe JSON malformate;
+- payload o tipo evento mancanti;
+- eventi token con campi obbligatori mancanti;
+- eventi non-token.
 
 ## 7) Esempi copy/paste
 
@@ -97,11 +124,11 @@ Prima di usare i comandi, puoi copiare `config.example.toml` in `config.toml` e 
 ```powershell
 $env:PYTHONPATH='src'
 python -m codex_usage.cli --config config.toml summary `
-  --save-report docs\summary.txt `
-  --export-events-csv docs\events.csv `
-  --export-daily-csv docs\daily_summary.csv `
-  --export-model-costs-csv docs\model_costs.csv `
-  --export-repo-csv docs\repo_summary.csv
+  --save-report reports\summary.txt `
+  --export-events-csv reports\events.csv `
+  --export-daily-csv reports\daily_summary.csv `
+  --export-model-costs-csv reports\model_costs.csv `
+  --export-repo-csv reports\repo_summary.csv
 ```
 
 ### B) Summary senza config (PowerShell)
@@ -111,11 +138,11 @@ $env:PYTHONPATH='src'
 python -m codex_usage.cli summary `
   --sessions-dir "C:\Users\marco\.codex - Copia\sessions" `
   --include-archived-sessions `
-  --save-report docs\summary.txt `
-  --export-events-csv docs\events.csv `
-  --export-daily-csv docs\daily_summary.csv `
-  --export-model-costs-csv docs\model_costs.csv `
-  --export-repo-csv docs\repo_summary.csv
+  --save-report reports\summary.txt `
+  --export-events-csv reports\events.csv `
+  --export-daily-csv reports\daily_summary.csv `
+  --export-model-costs-csv reports\model_costs.csv `
+  --export-repo-csv reports\repo_summary.csv
 ```
 
 ### C) Summary senza config (Linux/macOS)
@@ -124,11 +151,11 @@ python -m codex_usage.cli summary `
 PYTHONPATH=src python -m codex_usage.cli summary \
   --sessions-dir "$HOME/.codex/sessions" \
   --include-archived-sessions \
-  --save-report docs/summary.txt \
-  --export-events-csv docs/events.csv \
-  --export-daily-csv docs/daily_summary.csv \
-  --export-model-costs-csv docs/model_costs.csv \
-  --export-repo-csv docs/repo_summary.csv
+  --save-report reports/summary.txt \
+  --export-events-csv reports/events.csv \
+  --export-daily-csv reports/daily_summary.csv \
+  --export-model-costs-csv reports/model_costs.csv \
+  --export-repo-csv reports/repo_summary.csv
 ```
 
 ### D) Import SQLite usando `config.toml`
@@ -145,7 +172,7 @@ $env:PYTHONPATH='src'
 python -m codex_usage.cli import-sqlite `
   --sessions-dir "C:\Users\marco\.codex - Copia\sessions" `
   --include-archived-sessions `
-  --db-path docs\codex_usage.db `
+  --db-path data\codex_usage.db `
   --source-device windows-main `
   --source-account marco
 ```

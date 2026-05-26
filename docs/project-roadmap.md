@@ -124,13 +124,13 @@ Criterio di uscita: una persona che apre il repository capisce in 5 minuti cosa 
 
 Obiettivo: rendere affidabili parser, import e report sui dati reali.
 
-- [ ] Aggiungere test su file JSONL realistici con piu' turni nella stessa sessione.
-- [ ] Verificare deduplica tra report CLI e import SQLite, rendendo esplicite le regole.
-- [ ] Persistire `workspace_cwd` anche in `token_events`.
-- [ ] Salvare il nome repository normalizzato nel database.
-- [ ] Aggiungere contatori di qualita' dati anche all'import SQLite.
+- [x] Aggiungere test su file JSONL realistici con piu' turni nella stessa sessione.
+- [x] Verificare deduplica tra report CLI e import SQLite, rendendo esplicite le regole.
+- [x] Persistire `workspace_cwd` anche in `token_events`.
+- [x] Salvare il nome repository normalizzato nel database.
+- [x] Aggiungere contatori di qualita' dati anche all'import SQLite.
 - [ ] Gestire in modo esplicito modelli non riconosciuti nel pricing.
-- [ ] Aggiungere test sui timestamp numerici, ISO con timezone e valori mancanti.
+- [x] Aggiungere test sui timestamp numerici, ISO con timezone e valori mancanti.
 
 Criterio di uscita: gli stessi dati producono risultati coerenti tra CLI, CSV e SQLite.
 
@@ -182,7 +182,7 @@ Obiettivo: ridurre il lavoro manuale senza complicare il progetto.
 - [ ] Comando `refresh` che importa e produce report standard.
 - [ ] Script PowerShell per aggiornamento locale.
 - [ ] Possibile task schedulato giornaliero o settimanale.
-- [ ] Cartella output standard (`docs/reports` o `reports`).
+- [x] Cartella output standard (`reports` per report, `data` per SQLite).
 - [ ] Naming stabile dei report per data.
 
 Criterio di uscita: aggiornare lo storico diventa un comando unico.

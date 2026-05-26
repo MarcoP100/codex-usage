@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from datetime import timezone
+
 from codex_usage.parser import (
     parse_token_usage_event,
     parse_token_usage_event_with_status,
@@ -116,3 +118,69 @@ def test_parse_model_fallback_to_default_model_slug() -> None:
     event = parse_token_usage_event(line)
     assert event is not None
     assert event.model == "gpt-5.3-codex"
+
+
+def test_parse_accepts_numeric_timestamp() -> None:
+    line = (
+        '{"timestamp":0,"payload":{"type":"token_count",'
+        '"input_tokens":7,"cached_input_tokens":3,"output_tokens":5,'
+        '"reasoning_output_tokens":2,"total_tokens":12}}'
+    )
+
+    event = parse_token_usage_event(line)
+
+    assert event is not None
+    assert event.timestamp.year == 1970
+    assert event.timestamp.tzinfo == timezone.utc
+
+
+def test_parse_accepts_iso_timestamp_with_timezone_offset() -> None:
+    line = (
+        '{"timestamp":"2026-05-19T12:30:00+02:00","payload":{"type":"token_count",'
+        '"input_tokens":7,"cached_input_tokens":3,"output_tokens":5,'
+        '"reasoning_output_tokens":2,"total_tokens":12}}'
+    )
+
+    event = parse_token_usage_event(line)
+
+    assert event is not None
+    assert event.timestamp.isoformat() == "2026-05-19T12:30:00+02:00"
+
+
+def test_parse_uses_created_at_timestamp_fallback() -> None:
+    line = (
+        '{"created_at":"2026-05-19T10:00:00Z","payload":{"type":"token_count",'
+        '"input_tokens":7,"cached_input_tokens":3,"output_tokens":5,'
+        '"reasoning_output_tokens":2,"total_tokens":12}}'
+    )
+
+    event = parse_token_usage_event(line)
+
+    assert event is not None
+    assert event.timestamp.isoformat() == "2026-05-19T10:00:00+00:00"
+
+
+def test_parse_uses_payload_timestamp_fallback() -> None:
+    line = (
+        '{"payload":{"type":"token_count","timestamp":"2026-05-19T10:00:00Z",'
+        '"input_tokens":7,"cached_input_tokens":3,"output_tokens":5,'
+        '"reasoning_output_tokens":2,"total_tokens":12}}'
+    )
+
+    event = parse_token_usage_event(line)
+
+    assert event is not None
+    assert event.timestamp.isoformat() == "2026-05-19T10:00:00+00:00"
+
+
+def test_parse_missing_timestamp_is_invalid() -> None:
+    line = (
+        '{"payload":{"type":"token_count",'
+        '"input_tokens":7,"cached_input_tokens":3,"output_tokens":5,'
+        '"reasoning_output_tokens":2,"total_tokens":12}}'
+    )
+
+    status, event = parse_token_usage_event_with_status(line)
+
+    assert status == "missing_payload_type"
+    assert event is None
