@@ -1,0 +1,22 @@
+[app]
+# Directory che contiene i file sessione Codex *.jsonl.
+# Se non impostata, il tool usa la directory predefinita di Codex:
+# - Windows: %USERPROFILE%/.codex/sessions
+# - Linux/macOS: ~/.codex/sessions
+#
+# Esempio Windows:
+# sessions_dir = "C:/Users/marco/.codex/sessions"
+#
+# Esempio copia locale, utile per testare senza leggere direttamente la directory attiva:
+# sessions_dir = "C:/Users/marco/.codex - Copia/sessions"
+
+# Include anche la directory archived_sessions accanto a sessions.
+include_archived_sessions = true
+
+# Database SQLite locale prodotto dal comando import-sqlite.
+sqlite_db_path = "docs/codex_usage.db"
+
+# Metadati facoltativi salvati nel database per distinguere import da macchine
+# o account diversi. Non influenzano il calcolo dei token.
+source_device = "windows-main"
+source_account = "marco"

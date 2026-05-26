@@ -45,6 +45,8 @@ Il tool arricchisce gli eventi token con metadati trovati nei `turn_context` del
 
 ## 4) Costi stimati
 
+I costi mostrati dal tool sono stime API-equivalenti. Non sono il billing ufficiale OpenAI e non rappresentano il costo reale dell'infrastruttura. Servono solo per confrontare ordini di grandezza, trend e distribuzione dell'uso.
+
 I costi sono calcolati per modello:
 
 - `gpt-5.5`: input `5.00`, cached `0.50`, output `30.00`
@@ -53,6 +55,8 @@ I costi sono calcolati per modello:
 - `gpt-5.3-codex`: input `1.75`, cached `0.175`, output `14.00`
 
 Unità: USD per 1M token.
+
+Se un modello non e' presente nella tabella, il tool usa il pricing predefinito configurato nel codice.
 
 ## 5) Output disponibili
 
@@ -85,6 +89,8 @@ Comando `import-sqlite`:
 - idempotente via `raw_event_hash` (no duplicati su re-import)
 
 ## 7) Esempi copy/paste
+
+Prima di usare i comandi, puoi copiare `config.example.toml` in `config.toml` e adattare i path alla tua macchina.
 
 ### A) Summary usando `config.toml` (consigliato)
 
