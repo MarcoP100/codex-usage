@@ -1,4 +1,4 @@
-﻿from __future__ import annotations
+from __future__ import annotations
 
 import hashlib
 import json
@@ -8,10 +8,10 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
+from codex_usage.ingestion import DataQuality, iter_session_lines
 from codex_usage.models import TokenUsageEvent
-from codex_usage.parser import parse_token_usage_event_with_status, parse_turn_context_metadata
+from codex_usage.pricing import cost_breakdown_usd
 from codex_usage.repository import repository_key_from_cwd
-from codex_usage.scanner import iter_session_files
 
 
 def _normalized_hash(line: str) -> str:
@@ -128,23 +128,6 @@ def _ensure_column(
         conn.execute(f"ALTER TABLE {table_name} ADD COLUMN {column_name} {column_definition}")
 
 
-def _cost_components_usd(
-    model: str | None,
-    input_tokens: int,
-    cached_input_tokens: int,
-    output_tokens: int,
-    pricing: dict[str, tuple[float, float, float]],
-    default_pricing: tuple[float, float, float],
-) -> tuple[float, float, float]:
-    model_key = (model or "").strip().lower()
-    non_cached_rate, cached_rate, output_rate = pricing.get(model_key, default_pricing)
-    non_cached_input = input_tokens - cached_input_tokens
-    non_cached_input_cost = (non_cached_input / 1_000_000) * non_cached_rate
-    cached_input_cost = (cached_input_tokens / 1_000_000) * cached_rate
-    output_cost = (output_tokens / 1_000_000) * output_rate
-    return (non_cached_input_cost, cached_input_cost, output_cost)
-
-
 def import_token_events_to_sqlite(
     *,
     db_path: Path,
@@ -161,165 +144,164 @@ def import_token_events_to_sqlite(
     conn = sqlite3.connect(db_path)
     try:
         _create_schema(conn)
+        data_quality = DataQuality()
         raw_inserted = 0
         raw_skipped_duplicate = 0
         token_inserted = 0
         token_skipped_duplicate = 0
-        files_scanned = 0
-        lines_scanned = 0
-        malformed_json_lines = 0
-        missing_payload_type = 0
-        missing_token_fields = 0
-        non_token_events = 0
 
-        for session_file in iter_session_files(
+        for parsed_line in iter_session_lines(
             sessions_dir,
             include_archived_sessions=include_archived_sessions,
+            data_quality=data_quality,
         ):
-            files_scanned += 1
-            current_model: str | None = None
-            current_effort: str | None = None
-            current_cwd: str | None = None
-            relative_session_file = _relative_session_file(sessions_dir, session_file)
+            raw_event_hash = _normalized_hash(parsed_line.line)
+            relative_session_file = _relative_session_file(
+                sessions_dir,
+                parsed_line.session_file,
+            )
+            payload = _parse_json_dict(parsed_line.line)
+            raw_was_inserted = _insert_raw_event(
+                conn,
+                raw_event_hash=raw_event_hash,
+                source_device=source_device,
+                source_account=source_account,
+                session_file=relative_session_file,
+                line_number=parsed_line.line_number,
+                payload=payload,
+                raw_json=parsed_line.line.rstrip("\n"),
+                imported_at=imported_at,
+            )
+            if raw_was_inserted:
+                raw_inserted += 1
+            else:
+                raw_skipped_duplicate += 1
 
-            with session_file.open("r", encoding="utf-8") as handle:
-                for line_number, line in enumerate(handle, start=1):
-                    lines_scanned += 1
-                    raw_event_hash = _normalized_hash(line)
+            if parsed_line.status != "valid" or parsed_line.event is None:
+                continue
 
-                    payload = _parse_json_dict(line)
-                    raw_timestamp = _extract_raw_event_timestamp(payload) if payload else None
-                    raw_event_type = _extract_raw_event_type(payload) if payload else None
-
-                    raw_cursor = conn.execute(
-                        """
-                        INSERT OR IGNORE INTO raw_events (
-                            raw_event_hash, source_device, source_account, session_file,
-                            line_number, event_type, timestamp, raw_json, imported_at
-                        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-                        """,
-                        (
-                            raw_event_hash,
-                            source_device,
-                            source_account,
-                            relative_session_file,
-                            line_number,
-                            raw_event_type,
-                            raw_timestamp,
-                            line.rstrip("\n"),
-                            imported_at,
-                        ),
-                    )
-                    if raw_cursor.rowcount == 1:
-                        raw_inserted += 1
-                    else:
-                        raw_skipped_duplicate += 1
-
-                    turn_model, turn_effort, turn_cwd = parse_turn_context_metadata(line)
-                    if turn_model:
-                        current_model = turn_model
-                    if turn_effort:
-                        current_effort = turn_effort
-                    if turn_cwd:
-                        current_cwd = turn_cwd
-
-                    status, event = parse_token_usage_event_with_status(line)
-                    if status == "malformed_json":
-                        malformed_json_lines += 1
-                        continue
-                    if status == "missing_payload_type":
-                        missing_payload_type += 1
-                        continue
-                    if status == "missing_token_fields":
-                        missing_token_fields += 1
-                        continue
-                    if status == "not_token_event":
-                        non_token_events += 1
-                        continue
-                    if status != "valid" or event is None:
-                        continue
-
-                    if (
-                        event.model is None
-                        or event.reasoning_effort is None
-                        or event.workspace_cwd is None
-                    ):
-                        event = TokenUsageEvent(
-                            timestamp=event.timestamp,
-                            input_tokens=event.input_tokens,
-                            cached_input_tokens=event.cached_input_tokens,
-                            output_tokens=event.output_tokens,
-                            reasoning_output_tokens=event.reasoning_output_tokens,
-                            total_tokens=event.total_tokens,
-                            cumulative_total_tokens=event.cumulative_total_tokens,
-                            model=event.model or current_model,
-                            reasoning_effort=event.reasoning_effort or current_effort,
-                            workspace_cwd=event.workspace_cwd or current_cwd,
-                        )
-
-                    non_cached = event.input_tokens - event.cached_input_tokens
-                    repository = repository_key_from_cwd(event.workspace_cwd)
-                    non_cached_cost, cached_cost, output_cost = _cost_components_usd(
-                        event.model,
-                        event.input_tokens,
-                        event.cached_input_tokens,
-                        event.output_tokens,
-                        pricing,
-                        default_pricing,
-                    )
-                    estimated_total_cost = non_cached_cost + cached_cost + output_cost
-
-                    token_cursor = conn.execute(
-                        """
-                        INSERT OR IGNORE INTO token_events (
-                            event_id, source_device, source_account, session_file, timestamp,
-                            model, reasoning_effort, workspace_cwd, repository,
-                            input_tokens, cached_input_tokens,
-                            non_cached_input_tokens, output_tokens, reasoning_output_tokens,
-                            total_tokens, estimated_cost_usd, raw_event_hash, imported_at
-                        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                        """,
-                        (
-                            str(uuid.uuid4()),
-                            source_device,
-                            source_account,
-                            relative_session_file,
-                            event.timestamp.isoformat(),
-                            event.model,
-                            event.reasoning_effort,
-                            event.workspace_cwd,
-                            repository,
-                            event.input_tokens,
-                            event.cached_input_tokens,
-                            non_cached,
-                            event.output_tokens,
-                            event.reasoning_output_tokens,
-                            event.total_tokens,
-                            estimated_total_cost,
-                            raw_event_hash,
-                            imported_at,
-                        ),
-                    )
-                    if token_cursor.rowcount == 1:
-                        token_inserted += 1
-                    else:
-                        token_skipped_duplicate += 1
+            event = parsed_line.event
+            token_was_inserted = _insert_token_event(
+                conn,
+                event=event,
+                source_device=source_device,
+                source_account=source_account,
+                session_file=relative_session_file,
+                raw_event_hash=raw_event_hash,
+                imported_at=imported_at,
+                pricing=pricing,
+                default_pricing=default_pricing,
+            )
+            if token_was_inserted:
+                token_inserted += 1
+            else:
+                token_skipped_duplicate += 1
 
         conn.commit()
         return {
-            "files_scanned": files_scanned,
-            "lines_scanned": lines_scanned,
+            "files_scanned": data_quality.files_scanned,
+            "lines_scanned": data_quality.lines_scanned,
             "raw_inserted": raw_inserted,
             "raw_skipped_duplicate": raw_skipped_duplicate,
             "token_inserted": token_inserted,
             "token_skipped_duplicate": token_skipped_duplicate,
-            "malformed_json_lines": malformed_json_lines,
-            "missing_payload_type": missing_payload_type,
-            "missing_token_fields": missing_token_fields,
-            "non_token_events": non_token_events,
+            "malformed_json_lines": data_quality.malformed_json_lines,
+            "missing_payload_type": data_quality.missing_payload_type,
+            "missing_token_fields": data_quality.missing_token_fields,
+            "non_token_events": data_quality.non_token_events,
             # backward-compat keys
             "inserted": token_inserted,
             "skipped_duplicate": token_skipped_duplicate,
         }
     finally:
         conn.close()
+
+
+def _insert_raw_event(
+    conn: sqlite3.Connection,
+    *,
+    raw_event_hash: str,
+    source_device: str | None,
+    source_account: str | None,
+    session_file: str,
+    line_number: int,
+    payload: dict[str, Any] | None,
+    raw_json: str,
+    imported_at: str,
+) -> bool:
+    raw_cursor = conn.execute(
+        """
+        INSERT OR IGNORE INTO raw_events (
+            raw_event_hash, source_device, source_account, session_file,
+            line_number, event_type, timestamp, raw_json, imported_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """,
+        (
+            raw_event_hash,
+            source_device,
+            source_account,
+            session_file,
+            line_number,
+            _extract_raw_event_type(payload) if payload else None,
+            _extract_raw_event_timestamp(payload) if payload else None,
+            raw_json,
+            imported_at,
+        ),
+    )
+    return raw_cursor.rowcount == 1
+
+
+def _insert_token_event(
+    conn: sqlite3.Connection,
+    *,
+    event: TokenUsageEvent,
+    source_device: str | None,
+    source_account: str | None,
+    session_file: str,
+    raw_event_hash: str,
+    imported_at: str,
+    pricing: dict[str, tuple[float, float, float]],
+    default_pricing: tuple[float, float, float],
+) -> bool:
+    non_cached = event.input_tokens - event.cached_input_tokens
+    repository = repository_key_from_cwd(event.workspace_cwd)
+    cost = cost_breakdown_usd(
+        model=event.model,
+        input_tokens=event.input_tokens,
+        cached_input_tokens=event.cached_input_tokens,
+        output_tokens=event.output_tokens,
+        pricing=pricing,
+        default_pricing=default_pricing,
+    )
+    token_cursor = conn.execute(
+        """
+        INSERT OR IGNORE INTO token_events (
+            event_id, source_device, source_account, session_file, timestamp,
+            model, reasoning_effort, workspace_cwd, repository,
+            input_tokens, cached_input_tokens,
+            non_cached_input_tokens, output_tokens, reasoning_output_tokens,
+            total_tokens, estimated_cost_usd, raw_event_hash, imported_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """,
+        (
+            str(uuid.uuid4()),
+            source_device,
+            source_account,
+            session_file,
+            event.timestamp.isoformat(),
+            event.model,
+            event.reasoning_effort,
+            event.workspace_cwd,
+            repository,
+            event.input_tokens,
+            event.cached_input_tokens,
+            non_cached,
+            event.output_tokens,
+            event.reasoning_output_tokens,
+            event.total_tokens,
+            cost.total_usd,
+            raw_event_hash,
+            imported_at,
+        ),
+    )
+    return token_cursor.rowcount == 1
