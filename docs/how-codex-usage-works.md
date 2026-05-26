@@ -66,6 +66,12 @@ Unità: USD per 1M token.
 
 Se un modello non e' presente nella tabella, il tool usa il pricing predefinito configurato nel codice.
 
+Il fallback non e' silenzioso:
+
+- nel report viene mostrata la sezione `Models using default pricing`;
+- nell'import SQLite viene valorizzato `pricing_used_default`;
+- il comando `import-sqlite` stampa il totale degli eventi token che hanno usato il pricing predefinito.
+
 ## 5) Output disponibili
 
 ### Report console / file
@@ -104,6 +110,7 @@ Comando `import-sqlite`:
 - salva `raw_events` (tutte le righe JSONL)
 - salva `token_events` (eventi token normalizzati)
 - salva `workspace_cwd` e `repository` sugli eventi token quando ricavati da `turn_context`
+- salva `pricing_used_default` per rendere espliciti i modelli non presenti nella tabella prezzi
 - idempotente via `raw_event_hash` (no duplicati su re-import)
 
 L'import SQLite deduplica a livello di riga raw normalizzata (`raw_event_hash`). Questo conserva una relazione verificabile tra evento grezzo e token normalizzato.

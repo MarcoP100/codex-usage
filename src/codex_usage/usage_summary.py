@@ -34,6 +34,7 @@ class UsageSummaryData:
     model_non_cached_input_cost: dict[str, float] = field(default_factory=lambda: defaultdict(float))
     model_cached_input_cost: dict[str, float] = field(default_factory=lambda: defaultdict(float))
     model_output_cost: dict[str, float] = field(default_factory=lambda: defaultdict(float))
+    model_default_pricing_events: dict[str, int] = field(default_factory=lambda: defaultdict(int))
     repo_events: dict[str, int] = field(default_factory=lambda: defaultdict(int))
     repo_input_tokens: dict[str, int] = field(default_factory=lambda: defaultdict(int))
     repo_cached_tokens: dict[str, int] = field(default_factory=lambda: defaultdict(int))
@@ -152,6 +153,8 @@ def _add_event(data: UsageSummaryData, event: TokenUsageEvent) -> None:
     data.model_non_cached_input_cost[model_key] += cost.non_cached_input_usd
     data.model_cached_input_cost[model_key] += cost.cached_input_usd
     data.model_output_cost[model_key] += cost.output_usd
+    if cost.used_default_pricing:
+        data.model_default_pricing_events[model_key] += 1
 
     repo_key = repository_key_from_cwd(event.workspace_cwd)
     data.repo_events[repo_key] += 1

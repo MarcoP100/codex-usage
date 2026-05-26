@@ -397,6 +397,7 @@ def main() -> int:
         print(f"Missing payload/type: {result['missing_payload_type']}")
         print(f"Missing token fields: {result['missing_token_fields']}")
         print(f"Non-token events: {result['non_token_events']}")
+        print(f"Token events using default pricing: {result['default_pricing_token_events']}")
         print(f"Inserted raw events: {result['raw_inserted']}")
         print(f"Skipped raw duplicates: {result['raw_skipped_duplicate']}")
         print(f"Inserted token events: {result['token_inserted']}")

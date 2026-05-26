@@ -75,6 +75,11 @@ def render_summary_report(sessions_dir: Path, data: UsageSummaryData) -> str:
     report_lines.append("Estimated cost by model")
     for model, cost in sorted(data.model_estimated_cost.items(), key=lambda item: item[1], reverse=True):
         report_lines.append(f"{model}: {fmt_usd(cost)}")
+    if data.model_default_pricing_events:
+        report_lines.append("")
+        report_lines.append("Models using default pricing")
+        for model, events in sorted(data.model_default_pricing_events.items()):
+            report_lines.append(f"{model}: {events:,} event(s)")
     report_lines.append("")
     report_lines.append("NOTE:")
     report_lines.append("This is NOT the real OpenAI infrastructure cost.")

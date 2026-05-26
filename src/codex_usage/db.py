@@ -10,7 +10,7 @@ from typing import Any
 
 from codex_usage.ingestion import DataQuality, iter_session_lines
 from codex_usage.models import TokenUsageEvent
-from codex_usage.pricing import cost_breakdown_usd
+from codex_usage.pricing import CostBreakdown, cost_breakdown_usd
 from codex_usage.repository import repository_key_from_cwd
 
 
@@ -90,6 +90,7 @@ def _create_schema(conn: sqlite3.Connection) -> None:
             reasoning_output_tokens INTEGER NOT NULL,
             total_tokens INTEGER NOT NULL,
             estimated_cost_usd REAL NOT NULL,
+            pricing_used_default INTEGER NOT NULL DEFAULT 0,
             raw_event_hash TEXT NOT NULL UNIQUE,
             imported_at TEXT NOT NULL,
             FOREIGN KEY(raw_event_hash) REFERENCES raw_events(raw_event_hash)
@@ -110,6 +111,7 @@ def _create_schema(conn: sqlite3.Connection) -> None:
     )
     _ensure_column(conn, "token_events", "workspace_cwd", "TEXT")
     _ensure_column(conn, "token_events", "repository", "TEXT NOT NULL DEFAULT 'unknown'")
+    _ensure_column(conn, "token_events", "pricing_used_default", "INTEGER NOT NULL DEFAULT 0")
     conn.execute(
         "CREATE INDEX IF NOT EXISTS idx_token_events_repository ON token_events(repository)"
     )
@@ -149,6 +151,7 @@ def import_token_events_to_sqlite(
         raw_skipped_duplicate = 0
         token_inserted = 0
         token_skipped_duplicate = 0
+        default_pricing_token_events = 0
 
         for parsed_line in iter_session_lines(
             sessions_dir,
@@ -181,16 +184,25 @@ def import_token_events_to_sqlite(
                 continue
 
             event = parsed_line.event
+            cost = cost_breakdown_usd(
+                model=event.model,
+                input_tokens=event.input_tokens,
+                cached_input_tokens=event.cached_input_tokens,
+                output_tokens=event.output_tokens,
+                pricing=pricing,
+                default_pricing=default_pricing,
+            )
+            if cost.used_default_pricing:
+                default_pricing_token_events += 1
             token_was_inserted = _insert_token_event(
                 conn,
                 event=event,
+                cost=cost,
                 source_device=source_device,
                 source_account=source_account,
                 session_file=relative_session_file,
                 raw_event_hash=raw_event_hash,
                 imported_at=imported_at,
-                pricing=pricing,
-                default_pricing=default_pricing,
             )
             if token_was_inserted:
                 token_inserted += 1
@@ -209,6 +221,7 @@ def import_token_events_to_sqlite(
             "missing_payload_type": data_quality.missing_payload_type,
             "missing_token_fields": data_quality.missing_token_fields,
             "non_token_events": data_quality.non_token_events,
+            "default_pricing_token_events": default_pricing_token_events,
             # backward-compat keys
             "inserted": token_inserted,
             "skipped_duplicate": token_skipped_duplicate,
@@ -255,24 +268,15 @@ def _insert_token_event(
     conn: sqlite3.Connection,
     *,
     event: TokenUsageEvent,
+    cost: CostBreakdown,
     source_device: str | None,
     source_account: str | None,
     session_file: str,
     raw_event_hash: str,
     imported_at: str,
-    pricing: dict[str, tuple[float, float, float]],
-    default_pricing: tuple[float, float, float],
 ) -> bool:
     non_cached = event.input_tokens - event.cached_input_tokens
     repository = repository_key_from_cwd(event.workspace_cwd)
-    cost = cost_breakdown_usd(
-        model=event.model,
-        input_tokens=event.input_tokens,
-        cached_input_tokens=event.cached_input_tokens,
-        output_tokens=event.output_tokens,
-        pricing=pricing,
-        default_pricing=default_pricing,
-    )
     token_cursor = conn.execute(
         """
         INSERT OR IGNORE INTO token_events (
@@ -280,8 +284,9 @@ def _insert_token_event(
             model, reasoning_effort, workspace_cwd, repository,
             input_tokens, cached_input_tokens,
             non_cached_input_tokens, output_tokens, reasoning_output_tokens,
-            total_tokens, estimated_cost_usd, raw_event_hash, imported_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            total_tokens, estimated_cost_usd, pricing_used_default,
+            raw_event_hash, imported_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """,
         (
             str(uuid.uuid4()),
@@ -300,6 +305,7 @@ def _insert_token_event(
             event.reasoning_output_tokens,
             event.total_tokens,
             cost.total_usd,
+            int(cost.used_default_pricing),
             raw_event_hash,
             imported_at,
         ),

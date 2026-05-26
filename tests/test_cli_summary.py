@@ -88,3 +88,38 @@ def test_summary_reports_duplicate_token_events(tmp_path: Path, capsys) -> None:
     assert exit_code == 0
     assert "Valid token events: 1" in output
     assert "Duplicate events skipped: 1" in output
+
+
+def test_summary_reports_unknown_models_using_default_pricing(
+    tmp_path: Path,
+    capsys,
+) -> None:
+    sessions_dir = tmp_path / "sessions"
+    day_dir = sessions_dir / "2026" / "05" / "20"
+    day_dir.mkdir(parents=True)
+    session_file = day_dir / "rollout-unknown-pricing.jsonl"
+    session_file.write_text(
+        "\n".join(
+            [
+                '{"timestamp":"2026-05-20T10:00:00Z","type":"turn_context","payload":{"model":"future-model","effort":"medium","cwd":"C:/repo/project"}}',
+                '{"timestamp":"2026-05-20T10:00:01Z","type":"event_msg","payload":{"type":"token_count","info":{"last_token_usage":{"input_tokens":100,"cached_input_tokens":20,"output_tokens":10,"reasoning_output_tokens":5,"total_tokens":115}}}}',
+            ]
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+    exit_code = cmd_summary(
+        sessions_dir=sessions_dir,
+        include_archived_sessions=False,
+        export_events_csv=None,
+        export_daily_csv=None,
+        save_report=None,
+        export_model_costs_csv=None,
+        export_repo_csv=None,
+    )
+
+    output = capsys.readouterr().out
+    assert exit_code == 0
+    assert "Models using default pricing" in output
+    assert "future-model: 1 event(s)" in output

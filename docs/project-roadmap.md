@@ -129,7 +129,7 @@ Obiettivo: rendere affidabili parser, import e report sui dati reali.
 - [x] Persistire `workspace_cwd` anche in `token_events`.
 - [x] Salvare il nome repository normalizzato nel database.
 - [x] Aggiungere contatori di qualita' dati anche all'import SQLite.
-- [ ] Gestire in modo esplicito modelli non riconosciuti nel pricing.
+- [x] Gestire in modo esplicito modelli non riconosciuti nel pricing.
 - [x] Aggiungere test sui timestamp numerici, ISO con timezone e valori mancanti.
 
 Criterio di uscita: gli stessi dati producono risultati coerenti tra CLI, CSV e SQLite.
