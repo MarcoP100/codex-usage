@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from codex_usage.sqlite_report import SqliteUsageBreakdownRow, SqliteUsageReportData
 from codex_usage.usage_summary import UsageSummaryData
 
 
@@ -128,3 +129,60 @@ def render_summary_report(sessions_dir: Path, data: UsageSummaryData) -> str:
             f"({data.daily_cached_tokens[day]:,}/{data.daily_input_tokens[day]:,})"
         )
     return "\n".join(report_lines).rstrip() + "\n"
+
+
+def render_sqlite_usage_report(data: SqliteUsageReportData) -> str:
+    totals = data.totals
+    report_lines: list[str] = []
+    report_lines.append(f"SQLite DB: {data.db_path}")
+    report_lines.append(f"Period: {_format_period(totals.first_seen_at, totals.last_seen_at)}")
+    report_lines.append(f"Import runs: {data.import_runs_count:,}")
+    if data.latest_import_run is not None:
+        report_lines.append(f"Latest import: {data.latest_import_run.completed_at}")
+    report_lines.append("")
+    report_lines.append("Token totals")
+    report_lines.append(f"Events:                  {totals.events:,}")
+    report_lines.append(f"Input tokens:            {human_tokens(totals.input_tokens)}")
+    report_lines.append(f"Cached input tokens:     {human_tokens(totals.cached_input_tokens)}")
+    report_lines.append(f"Non-cached input:        {human_tokens(totals.non_cached_input_tokens)}")
+    report_lines.append(f"Output tokens:           {human_tokens(totals.output_tokens)}")
+    report_lines.append(f"Reasoning tokens:        {human_tokens(totals.reasoning_output_tokens)}")
+    report_lines.append(f"Usage tokens estimate:   {fmt_tokens(totals.total_tokens)}")
+    report_lines.append(f"Cache ratio:             {fmt_pct(totals.cached_input_tokens, totals.input_tokens)}")
+    report_lines.append("")
+    report_lines.append("API-equivalent estimate")
+    report_lines.append(f"Non-cached input:   {fmt_usd(totals.estimated_non_cached_input_cost_usd)}")
+    report_lines.append(f"Cached input:       {fmt_usd(totals.estimated_cached_input_cost_usd)}")
+    report_lines.append(f"Output:             {fmt_usd(totals.estimated_output_cost_usd)}")
+    report_lines.append(f"Estimated total:    {fmt_usd(totals.estimated_cost_usd)}")
+    report_lines.append(f"Default pricing events: {totals.default_pricing_events:,}")
+    report_lines.append("")
+    _append_breakdown(report_lines, "Top repositories", data.top_repositories)
+    _append_breakdown(report_lines, "Top models", data.top_models)
+    _append_breakdown(report_lines, "Monthly usage", data.monthly_usage)
+    _append_breakdown(report_lines, "Recent daily usage", list(reversed(data.recent_daily_usage)))
+    return "\n".join(report_lines).rstrip() + "\n"
+
+
+def _format_period(first_seen_at: str | None, last_seen_at: str | None) -> str:
+    if first_seen_at is None or last_seen_at is None:
+        return "empty"
+    return f"{first_seen_at} -> {last_seen_at}"
+
+
+def _append_breakdown(
+    report_lines: list[str],
+    title: str,
+    rows: list[SqliteUsageBreakdownRow],
+) -> None:
+    report_lines.append(title)
+    if not rows:
+        report_lines.append("n/a")
+        report_lines.append("")
+        return
+    for row in rows:
+        report_lines.append(
+            f"{row.key}: events={row.events:,} tokens={fmt_tokens(row.total_tokens)} "
+            f"cost={fmt_usd(row.estimated_cost_usd)}"
+        )
+    report_lines.append("")

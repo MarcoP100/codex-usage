@@ -138,12 +138,12 @@ Criterio di uscita: gli stessi dati producono risultati coerenti tra CLI, CSV e 
 
 Obiettivo: preparare il database per analisi piu' ricche.
 
-- [ ] Aggiungere tabella `import_runs` con data import, sorgente, numero file e contatori.
-- [ ] Aggiungere tabella o vista `repositories`.
-- [ ] Aggiungere viste SQLite per aggregati giornalieri, mensili, per modello e per repository.
-- [ ] Separare costo input non-cache, costo cache e costo output nel DB.
-- [ ] Salvare `cumulative_total_tokens` dove disponibile.
-- [ ] Valutare una tabella `pricing_profiles` per versionare i prezzi usati.
+- [x] Aggiungere tabella `import_runs` con data import, sorgente, numero file e contatori.
+- [x] Aggiungere tabella o vista `repositories`.
+- [x] Aggiungere viste SQLite per aggregati giornalieri, settimanali, mensili, per modello e per repository.
+- [x] Separare costo input non-cache, costo cache e costo output nel DB.
+- [x] Salvare `cumulative_total_tokens` dove disponibile.
+- [x] Aggiungere `pricing_profiles` e `pricing_profile_rates` per versionare i prezzi usati.
 
 Criterio di uscita: il DB diventa la fonte principale per report avanzati e dashboard.
 
@@ -151,6 +151,7 @@ Criterio di uscita: il DB diventa la fonte principale per report avanzati e dash
 
 Obiettivo: passare da metriche grezze a insight pratici.
 
+- [x] Aggiungere comando `report` che legge da SQLite.
 - [ ] Aggiungere filtri CLI per periodo (`--from`, `--to`).
 - [ ] Aggiungere filtro per repository.
 - [ ] Aggiungere filtro per modello.
@@ -206,10 +207,9 @@ Questi sono i prossimi interventi consigliati, in ordine pratico:
 
 1. Salvare `workspace_cwd` e repository in SQLite.
 2. Aggiungere filtri per periodo alla CLI.
-3. Aggiungere `import_runs` per tracciare gli import.
-4. Creare viste SQLite per aggregati ricorrenti.
-5. Aggiungere export Markdown.
-6. Preparare una dashboard locale minima.
+3. Creare viste SQLite per aggregati ricorrenti.
+4. Aggiungere export Markdown.
+5. Preparare una dashboard locale minima.
 
 ## 8. Rischi e attenzioni
 

@@ -11,7 +11,8 @@ from codex_usage.pricing import (
     MODEL_PRICING_USD_PER_MILLION,
     cost_breakdown_usd,
 )
-from codex_usage.text_report import render_summary_report
+from codex_usage.sqlite_report import build_sqlite_usage_report
+from codex_usage.text_report import render_sqlite_usage_report, render_summary_report
 from codex_usage.usage_summary import build_usage_summary_data
 
 
@@ -221,7 +222,13 @@ def _build_parser() -> argparse.ArgumentParser:
         help="Optional TOML config path (default: ./config.toml if present)",
     )
     subparsers = parser.add_subparsers(dest="command", required=True)
+    _add_summary_parser(subparsers)
+    _add_import_sqlite_parser(subparsers)
+    _add_report_parser(subparsers)
+    return parser
 
+
+def _add_summary_parser(subparsers: argparse._SubParsersAction) -> None:
     summary_parser = subparsers.add_parser("summary", help="Show token usage summary")
     summary_parser.add_argument(
         "--sessions-dir",
@@ -260,6 +267,8 @@ def _build_parser() -> argparse.ArgumentParser:
         help="Write usage and estimated costs aggregated by repository to this CSV file",
     )
 
+
+def _add_import_sqlite_parser(subparsers: argparse._SubParsersAction) -> None:
     import_parser = subparsers.add_parser(
         "import-sqlite",
         help="Import token events into a stable SQLite schema (idempotent)",
@@ -291,7 +300,24 @@ def _build_parser() -> argparse.ArgumentParser:
         type=str,
         help="Optional source account label",
     )
-    return parser
+
+
+def _add_report_parser(subparsers: argparse._SubParsersAction) -> None:
+    report_parser = subparsers.add_parser(
+        "report",
+        help="Show a usage report from the SQLite database",
+    )
+    report_parser.add_argument(
+        "--db-path",
+        type=Path,
+        default=None,
+        help="SQLite database path",
+    )
+    report_parser.add_argument(
+        "--save-report",
+        type=Path,
+        help="Save console-style SQLite report to this text file",
+    )
 
 
 def cmd_summary(
@@ -361,6 +387,16 @@ def cmd_summary(
     return 0
 
 
+def cmd_report_sqlite(db_path: Path, save_report: Path | None) -> int:
+    report_data = build_sqlite_usage_report(db_path)
+    report_text = render_sqlite_usage_report(report_data)
+    print(report_text, end="")
+    if save_report is not None:
+        save_report.parent.mkdir(parents=True, exist_ok=True)
+        save_report.write_text(report_text, encoding="utf-8")
+    return 0
+
+
 def main() -> int:
     parser = _build_parser()
     args = parser.parse_args()
@@ -391,6 +427,8 @@ def main() -> int:
             default_pricing=DEFAULT_PRICING_USD_PER_MILLION,
         )
         print(f"DB: {args.db_path or config.sqlite_db_path}")
+        print(f"Import run ID: {result['import_run_id']}")
+        print(f"Pricing profile ID: {result['pricing_profile_id']}")
         print(f"Files scanned: {result['files_scanned']}")
         print(f"Lines scanned: {result['lines_scanned']}")
         print(f"Malformed JSON lines: {result['malformed_json_lines']}")
@@ -402,7 +440,13 @@ def main() -> int:
         print(f"Skipped raw duplicates: {result['raw_skipped_duplicate']}")
         print(f"Inserted token events: {result['token_inserted']}")
         print(f"Skipped token duplicates: {result['token_skipped_duplicate']}")
+        print(f"Backfilled token pricing: {result['pricing_backfilled_token_events']}")
         return 0
+    if args.command == "report":
+        return cmd_report_sqlite(
+            db_path=args.db_path or config.sqlite_db_path,
+            save_report=args.save_report,
+        )
 
     parser.error(f"Unsupported command: {args.command}")
     return 2

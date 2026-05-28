@@ -107,13 +107,31 @@ Questa regola evita doppi conteggi evidenti nel report aggregato, anche quando d
 
 Comando `import-sqlite`:
 
+- salva `import_runs` (una riga per ogni esecuzione import, anche se idempotente)
 - salva `raw_events` (tutte le righe JSONL)
 - salva `token_events` (eventi token normalizzati)
+- salva `pricing_profiles` e `pricing_profile_rates` per tracciare lo snapshot prezzi usato dall'import
 - salva `workspace_cwd` e `repository` sugli eventi token quando ricavati da `turn_context`
 - salva `pricing_used_default` per rendere espliciti i modelli non presenti nella tabella prezzi
+- salva `cumulative_total_tokens` quando disponibile da `total_token_usage`
+- salva i componenti separati del costo stimato: input non-cache, input cached e output
+- espone la vista `repositories`, derivata da `token_events`, con token e costi aggregati per repository
+- espone viste aggregate ricorrenti: `daily_usage`, `weekly_usage`, `monthly_usage`, `model_usage`, `model_effort_usage` e `repository_usage`
 - idempotente via `raw_event_hash` (no duplicati su re-import)
 
 L'import SQLite deduplica a livello di riga raw normalizzata (`raw_event_hash`). Questo conserva una relazione verificabile tra evento grezzo e token normalizzato.
+
+Ogni import produce un `import_run_id` e salva:
+
+- timestamp inizio/fine import;
+- `sessions_dir` e flag `include_archived_sessions`;
+- `source_device` e `source_account`;
+- `pricing_profile_id`;
+- contatori file, righe, inserimenti, duplicati e qualita' dati.
+
+Il profilo prezzi e' uno snapshot del listino usato al momento dell'import. Se in futuro i prezzi configurati cambiano, i vecchi eventi mantengono il `pricing_profile_id` con cui sono stati calcolati; un re-import idempotente non ricalcola i costi degli eventi gia' presenti.
+
+Se un database e' stato creato con una versione precedente dello schema, `import-sqlite` completa gli eventi token gia' presenti con `pricing_profile_id` e componenti separati del costo quando mancano.
 
 L'import espone anche contatori di qualita' dati:
 
@@ -182,4 +200,18 @@ python -m codex_usage.cli import-sqlite `
   --db-path data\codex_usage.db `
   --source-device windows-main `
   --source-account marco
+```
+
+### F) Report da SQLite usando `config.toml`
+
+```bash
+PYTHONPATH=src python -m codex_usage.cli --config config.toml report
+```
+
+Il comando `report` legge il database SQLite gia' importato e mostra totali, costi stimati, cache ratio, top repository, top modelli, riepilogo mensile e giornaliero recente.
+
+Per salvare lo stesso output:
+
+```bash
+PYTHONPATH=src python -m codex_usage.cli --config config.toml report --save-report reports/sqlite-report.txt
 ```
