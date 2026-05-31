@@ -1,0 +1,35 @@
+{% extends "base.html" %}
+
+{% block title %}codex-usage dashboard{% endblock %}
+
+{% block content %}
+  <section class="status-panel">
+    <div>
+      <p class="eyebrow">Local dashboard</p>
+      <h1>codex-usage</h1>
+    </div>
+
+    <dl class="status-grid">
+      <div>
+        <dt>Application</dt>
+        <dd>running</dd>
+      </div>
+      <div>
+        <dt>Data source</dt>
+        <dd>SQLite only</dd>
+      </div>
+      <div>
+        <dt>Database file</dt>
+        <dd class="path">{{ db_path }}</dd>
+      </div>
+      <div>
+        <dt>Path source</dt>
+        <dd>{{ db_path_source }}</dd>
+      </div>
+      <div>
+        <dt>Database status</dt>
+        <dd>{% if db_exists %}found{% else %}missing{% endif %}</dd>
+      </div>
+    </dl>
+  </section>
+{% endblock %}

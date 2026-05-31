@@ -175,7 +175,8 @@ Criterio di uscita: il report risponde alle domande piu' frequenti senza dover a
 
 Obiettivo: rendere l'analisi piu' esplorabile.
 
-- [ ] Scegliere approccio leggero: Streamlit, FastAPI + frontend minimale, oppure notebook.
+- Roadmap operativa: `docs/phase-4-dashboard-roadmap.md`.
+- [x] Scegliere approccio leggero: FastAPI + Jinja + Docker Compose.
 - [ ] Implementare la dashboard leggendo solo da SQLite.
 - [ ] Mostrare KPI principali: token, costo stimato, cache ratio, eventi, repository principali.
 - [ ] Aggiungere grafici per giorno/mese.
