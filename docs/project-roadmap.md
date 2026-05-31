@@ -181,9 +181,10 @@ Obiettivo: rendere l'analisi piu' esplorabile.
 - [x] Scegliere approccio leggero: FastAPI + Jinja + Docker Compose.
 - [x] Implementare la dashboard leggendo solo da SQLite.
 - [x] Mostrare KPI principali: token, costo stimato, cache ratio, eventi, repository principali.
+- [x] Aggiungere filtri interattivi per periodo, repo e modello.
 - [ ] Aggiungere grafici per giorno/mese.
 - [ ] Aggiungere breakdown per modello, effort e repository.
-- [ ] Aggiungere filtri interattivi per periodo, repo, modello e dispositivo.
+- [ ] Aggiungere filtro dashboard per dispositivo.
 - [ ] Aggiungere vista "data quality".
 
 Criterio di uscita: una dashboard locale consente di esplorare i dati senza rigenerare manualmente report.
@@ -218,11 +219,12 @@ Criterio di uscita: il progetto e' mantenibile senza dipendere dalla memoria di 
 Questi sono i prossimi interventi consigliati, in ordine pratico:
 
 1. Verificare manualmente report e Markdown su dati reali.
-2. Aggiungere filtri interattivi alla dashboard locale.
-3. Aggiungere grafici leggeri per trend giornalieri o mensili.
-4. Aggiungere confronto tra due periodi.
-5. Aggiungere comandi o checklist di backup/restore.
-6. Valutare import incrementale da offset JSONL.
+2. Aggiungere grafici leggeri per trend giornalieri o mensili.
+3. Aggiungere vista data quality alla dashboard.
+4. Aggiungere filtro dashboard per dispositivo.
+5. Aggiungere confronto tra due periodi.
+6. Aggiungere comandi o checklist di backup/restore.
+7. Valutare import incrementale da offset JSONL.
 
 ## 8. Rischi e attenzioni
 

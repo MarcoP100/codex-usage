@@ -9,7 +9,7 @@ from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
-from codex_usage.sqlite_report import build_sqlite_usage_report
+from codex_usage.sqlite_report import SqliteUsageReportFilters, build_sqlite_usage_report
 from codex_usage.text_report import fmt_pct, fmt_usd, human_tokens
 from codex_usage.web.settings import load_web_settings
 
@@ -50,9 +50,38 @@ def _format_top_events(rows: list[Any]) -> list[dict[str, str]]:
     ]
 
 
-def _dashboard_context(db_path: Path) -> dict[str, Any]:
+def _clean_query_value(value: str | None) -> str | None:
+    if value is None:
+        return None
+    stripped = value.strip()
+    return stripped or None
+
+
+def _filters_from_request(request: Request) -> tuple[SqliteUsageReportFilters | None, dict[str, str], str | None]:
+    form_values = {
+        "from": request.query_params.get("from", ""),
+        "to": request.query_params.get("to", ""),
+        "repository": request.query_params.get("repository", ""),
+        "model": request.query_params.get("model", ""),
+    }
     try:
-        report = build_sqlite_usage_report(db_path)
+        return (
+            SqliteUsageReportFilters(
+                from_date=_clean_query_value(form_values["from"]),
+                to_date=_clean_query_value(form_values["to"]),
+                repository=_clean_query_value(form_values["repository"]),
+                model=_clean_query_value(form_values["model"]),
+            ),
+            form_values,
+            None,
+        )
+    except ValueError as exc:
+        return (None, form_values, str(exc))
+
+
+def _dashboard_context(db_path: Path, filters: SqliteUsageReportFilters) -> dict[str, Any]:
+    try:
+        report = build_sqlite_usage_report(db_path, filters=filters)
     except sqlite3.Error as exc:
         return {
             "report": None,
@@ -63,6 +92,7 @@ def _dashboard_context(db_path: Path) -> dict[str, Any]:
     return {
         "report": {
             "period": _format_period(totals.first_seen_at, totals.last_seen_at),
+            "filters_active": not filters.is_empty,
             "import_runs": f"{report.import_runs_count:,}",
             "latest_import": (
                 report.latest_import_run.completed_at
@@ -101,9 +131,10 @@ def create_app() -> FastAPI:
     def index(request: Request) -> HTMLResponse:
         settings = load_web_settings()
         db_path = settings.db_path.expanduser()
-        dashboard = _dashboard_context(db_path) if settings.db_exists else {
+        filters, filter_values, filter_error = _filters_from_request(request)
+        dashboard = _dashboard_context(db_path, filters) if settings.db_exists and filters is not None else {
             "report": None,
-            "report_error": "SQLite database file was not found.",
+            "report_error": filter_error or "SQLite database file was not found.",
         }
         return templates.TemplateResponse(
             request,
@@ -112,6 +143,7 @@ def create_app() -> FastAPI:
                 "db_exists": settings.db_exists,
                 "db_path": str(db_path),
                 "db_path_source": settings.db_path_source,
+                "filter_values": filter_values,
                 **dashboard,
             },
         )

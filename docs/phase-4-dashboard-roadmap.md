@@ -121,6 +121,8 @@ python -m uvicorn codex_usage.web.app:app --reload
 
 ## Step 3 - Filtri interattivi
 
+Stato: **completato** per periodo, repository e modello.
+
 Obiettivo: usare la dashboard per esplorare periodi e sottoinsiemi.
 
 Attivita':
@@ -137,6 +139,19 @@ Attivita':
 Criterio di uscita:
 
 - i filtri web producono gli stessi numeri del comando CLI equivalente.
+
+Implementato:
+
+- form GET in homepage;
+- filtri `from`, `to`, `repository`, `model`;
+- validazione date tramite `SqliteUsageReportFilters`;
+- valori preservati nei campi dopo il submit;
+- link `Clear` per tornare alla vista completa;
+- gestione errori senza HTTP 500;
+- test su DB temporaneo con piu' giorni, repository e modelli;
+- verifica browser con URL filtrata.
+
+Nota: il filtro `device` resta fuori da questo step perche' il layer condiviso `SqliteUsageReportFilters` non lo espone ancora. Va aggiunto prima nel report SQLite, poi nella UI.
 
 ## Step 4 - Grafici leggeri
 

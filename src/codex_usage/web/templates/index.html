@@ -33,6 +33,32 @@
     </dl>
   </section>
 
+  <section class="filter-panel page-section" aria-label="Dashboard filters">
+    <h2>Filters</h2>
+    <form method="get" action="/" class="filter-form">
+      <label>
+        <span>From</span>
+        <input type="date" name="from" value="{{ filter_values.from }}">
+      </label>
+      <label>
+        <span>To</span>
+        <input type="date" name="to" value="{{ filter_values.to }}">
+      </label>
+      <label>
+        <span>Repository</span>
+        <input type="text" name="repository" value="{{ filter_values.repository }}" placeholder="codex-usage">
+      </label>
+      <label>
+        <span>Model</span>
+        <input type="text" name="model" value="{{ filter_values.model }}" placeholder="gpt-5.4">
+      </label>
+      <div class="filter-actions">
+        <button type="submit">Apply</button>
+        <a href="/">Clear</a>
+      </div>
+    </form>
+  </section>
+
   {% if report_error %}
     <section class="notice page-section">
       <h2>Dashboard data</h2>
@@ -45,6 +71,9 @@
       <div>
         <p class="eyebrow">Covered period</p>
         <h2>{{ report.period }}</h2>
+        {% if report.filters_active %}
+          <p class="filter-state">Filtered view</p>
+        {% endif %}
       </div>
       <dl class="import-summary">
         <div>

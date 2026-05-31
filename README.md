@@ -100,7 +100,7 @@ Per lavorare in sicurezza puoi puntare `sessions_dir` a una copia locale delle s
 - CSV costi stimati per modello.
 - CSV riepilogo per repository.
 - Database SQLite locale con eventi grezzi e token normalizzati.
-- Dashboard locale con periodo coperto, KPI token/costi/cache e top repository, modelli, giornate, sessioni ed eventi.
+- Dashboard locale con periodo coperto, KPI token/costi/cache, filtri per periodo/repository/modello e top repository, modelli, giornate, sessioni ed eventi.
 
 ## Nota sui costi
 
@@ -116,4 +116,4 @@ python -m pytest
 
 ## Stato
 
-Progetto personale, non urgente, sviluppato in modo incrementale. La dashboard locale e' avviabile e mostra i KPI principali da SQLite; restano da aggiungere filtri, grafici, vista data quality e Docker.
+Progetto personale, non urgente, sviluppato in modo incrementale. La dashboard locale e' avviabile, mostra i KPI principali da SQLite e supporta filtri per periodo, repository e modello; restano da aggiungere grafici, vista data quality, filtro dispositivo e Docker.

@@ -80,6 +80,7 @@ dd {
 }
 
 .notice,
+.filter-panel,
 .summary-band,
 .data-table-section {
   background: #ffffff;
@@ -94,9 +95,70 @@ dd {
 }
 
 .notice p,
+.filter-state,
 .empty-state {
   margin: 0;
   color: #59636e;
+}
+
+.filter-panel h2 {
+  margin-bottom: 14px;
+}
+
+.filter-form {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr)) auto;
+  gap: 14px;
+  align-items: end;
+}
+
+.filter-form label {
+  min-width: 0;
+}
+
+.filter-form span {
+  display: block;
+  margin-bottom: 6px;
+  color: #59636e;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.filter-form input {
+  width: 100%;
+  min-width: 0;
+  border: 1px solid #d8dee4;
+  border-radius: 6px;
+  padding: 9px 10px;
+  color: #1b1f23;
+  font: inherit;
+}
+
+.filter-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.filter-actions button {
+  border: 1px solid #1f6feb;
+  border-radius: 6px;
+  background: #1f6feb;
+  color: #ffffff;
+  cursor: pointer;
+  font: inherit;
+  font-weight: 700;
+  padding: 9px 14px;
+}
+
+.filter-actions a {
+  color: #1f6feb;
+  font-weight: 700;
+  text-decoration: none;
+}
+
+.filter-state {
+  margin-top: 8px;
 }
 
 .summary-band {
@@ -203,7 +265,12 @@ th {
   }
 
   .kpi-grid,
-  .tables-grid {
+  .tables-grid,
+  .filter-form {
     grid-template-columns: 1fr;
+  }
+
+  .filter-actions {
+    justify-content: flex-start;
   }
 }
