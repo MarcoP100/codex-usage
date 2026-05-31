@@ -19,7 +19,34 @@ Convenzione consigliata nel repository:
 
 Per lavorare in sicurezza puoi impostare `sessions_dir` verso una copia locale delle sessioni, ad esempio `C:/Users/marco/.codex - Copia/sessions`.
 
-## 2) Eventi considerati per i token
+## 2) Backup e ricostruibilita'
+
+La cartella `.codex` diventa una sorgente dati importante: contiene le sessioni originali da cui il database puo' essere ricostruito. Il progetto non deve modificare quei file.
+
+Priorita' backup:
+
+1. backup della cartella `.codex` originale, o almeno di `sessions` e `archived_sessions`;
+2. backup della copia locale usata per sviluppo/import, se diversa dall'originale;
+3. backup opzionale del database SQLite in `data/`, utile per ripartenze veloci ma non come unica fonte.
+
+Il database SQLite deve essere considerato derivato: se viene perso o se una migrazione va male, deve poter essere eliminato e ricreato partendo dai JSONL salvati.
+
+Esempio Git Bash per ricreare il DB da zero dopo aver verificato di avere un backup delle sessioni:
+
+```bash
+rm -f data/codex_usage.db
+PYTHONPATH=src python -m codex_usage.cli --config config.toml import-sqlite
+```
+
+Prima di interventi rischiosi sullo schema puoi salvare una copia rapida del DB:
+
+```bash
+cp data/codex_usage.db "data/codex_usage.backup-$(date +%Y%m%d-%H%M%S).db"
+```
+
+L'app, la futura dashboard e i report avanzati devono leggere da SQLite. I JSONL restano confinati al livello di import, backfill e ricostruzione.
+
+## 3) Eventi considerati per i token
 
 Per le metriche token vengono usati solo gli eventi `payload.type == "token_count"`.
 
@@ -43,7 +70,7 @@ Timestamp (ordine):
 2. `created_at`
 3. `payload.timestamp`
 
-## 3) Metadati aggiuntivi
+## 4) Metadati aggiuntivi
 
 Il tool arricchisce gli eventi token con metadati trovati nei `turn_context` dello stesso file:
 
@@ -51,7 +78,7 @@ Il tool arricchisce gli eventi token con metadati trovati nei `turn_context` del
 - `reasoning_effort`
 - `cwd` (usato per report per repository)
 
-## 4) Costi stimati
+## 5) Costi stimati
 
 I costi mostrati dal tool sono stime API-equivalenti. Non sono il billing ufficiale OpenAI e non rappresentano il costo reale dell'infrastruttura. Servono solo per confrontare ordini di grandezza, trend e distribuzione dell'uso.
 
@@ -72,7 +99,7 @@ Il fallback non e' silenzioso:
 - nell'import SQLite viene valorizzato `pricing_used_default`;
 - il comando `import-sqlite` stampa il totale degli eventi token che hanno usato il pricing predefinito.
 
-## 5) Output disponibili
+## 6) Output disponibili
 
 ### Report console / file
 
@@ -103,7 +130,7 @@ Questa regola evita doppi conteggi evidenti nel report aggregato, anche quando d
 - `--export-model-costs-csv`: costi per modello
 - `--export-repo-csv`: aggregato per repository
 
-## 6) Import SQLite
+## 7) Import SQLite
 
 Comando `import-sqlite`:
 
@@ -140,7 +167,7 @@ L'import espone anche contatori di qualita' dati:
 - eventi token con campi obbligatori mancanti;
 - eventi non-token.
 
-## 7) Esempi copy/paste
+## 8) Esempi copy/paste
 
 Prima di usare i comandi, puoi copiare `config.example.toml` in `config.toml` e adattare i path alla tua macchina.
 
@@ -161,7 +188,7 @@ python -m codex_usage.cli --config config.toml summary `
 ```powershell
 $env:PYTHONPATH='src'
 python -m codex_usage.cli summary `
-  --sessions-dir "C:\Users\marco\.codex - Copia\sessions" `
+  --sessions-dir "C:\Users\marco\.codex\sessions" `
   --include-archived-sessions `
   --save-report reports\summary.txt `
   --export-events-csv reports\events.csv `
@@ -208,10 +235,36 @@ python -m codex_usage.cli import-sqlite `
 PYTHONPATH=src python -m codex_usage.cli --config config.toml report
 ```
 
-Il comando `report` legge il database SQLite gia' importato e mostra totali, costi stimati, cache ratio, top repository, top modelli, riepilogo mensile e giornaliero recente.
+Il comando `report` legge il database SQLite gia' importato e mostra totali, costi stimati, cache ratio, top repository, top modelli, giornate piu' pesanti, sessioni piu' pesanti, eventi piu' pesanti, riepilogo mensile e giornaliero recente.
 
-Per salvare lo stesso output:
+Filtri disponibili:
+
+```bash
+PYTHONPATH=src python -m codex_usage.cli --config config.toml report \
+  --from 2026-05-01 \
+  --to 2026-05-31 \
+  --repository codex-usage \
+  --model gpt-5.4
+```
+
+Riepiloghi espliciti per periodo:
+
+```bash
+PYTHONPATH=src python -m codex_usage.cli --config config.toml report --group-by day
+PYTHONPATH=src python -m codex_usage.cli --config config.toml report --group-by week
+PYTHONPATH=src python -m codex_usage.cli --config config.toml report --group-by month
+```
+
+`--group-by` puo' essere combinato con i filtri `--from`, `--to`, `--repository` e `--model`.
+
+Per salvare lo stesso output testuale:
 
 ```bash
 PYTHONPATH=src python -m codex_usage.cli --config config.toml report --save-report reports/sqlite-report.txt
+```
+
+Per salvare un report Markdown:
+
+```bash
+PYTHONPATH=src python -m codex_usage.cli --config config.toml report --save-markdown reports/sqlite-report.md
 ```

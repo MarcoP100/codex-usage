@@ -2,7 +2,11 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from codex_usage.sqlite_report import SqliteUsageBreakdownRow, SqliteUsageReportData
+from codex_usage.sqlite_report import (
+    SqliteUsageBreakdownRow,
+    SqliteUsageEventHighlight,
+    SqliteUsageReportData,
+)
 from codex_usage.usage_summary import UsageSummaryData
 
 
@@ -135,6 +139,7 @@ def render_sqlite_usage_report(data: SqliteUsageReportData) -> str:
     totals = data.totals
     report_lines: list[str] = []
     report_lines.append(f"SQLite DB: {data.db_path}")
+    report_lines.append(f"Filters: {_format_sqlite_filters(data)}")
     report_lines.append(f"Period: {_format_period(totals.first_seen_at, totals.last_seen_at)}")
     report_lines.append(f"Import runs: {data.import_runs_count:,}")
     if data.latest_import_run is not None:
@@ -159,8 +164,17 @@ def render_sqlite_usage_report(data: SqliteUsageReportData) -> str:
     report_lines.append("")
     _append_breakdown(report_lines, "Top repositories", data.top_repositories)
     _append_breakdown(report_lines, "Top models", data.top_models)
+    _append_breakdown(report_lines, "Top days", data.top_days)
+    _append_breakdown(report_lines, "Top sessions", data.top_sessions)
+    _append_top_events(report_lines, data.top_events)
     _append_breakdown(report_lines, "Monthly usage", data.monthly_usage)
     _append_breakdown(report_lines, "Recent daily usage", list(reversed(data.recent_daily_usage)))
+    if data.group_by is not None:
+        _append_breakdown(
+            report_lines,
+            f"Usage by {data.group_by}",
+            data.grouped_usage,
+        )
     return "\n".join(report_lines).rstrip() + "\n"
 
 
@@ -168,6 +182,22 @@ def _format_period(first_seen_at: str | None, last_seen_at: str | None) -> str:
     if first_seen_at is None or last_seen_at is None:
         return "empty"
     return f"{first_seen_at} -> {last_seen_at}"
+
+
+def _format_sqlite_filters(data: SqliteUsageReportData) -> str:
+    filters = data.filters
+    if filters.is_empty:
+        return "none"
+    parts: list[str] = []
+    if filters.from_date:
+        parts.append(f"from={filters.from_date}")
+    if filters.to_date:
+        parts.append(f"to={filters.to_date}")
+    if filters.repository:
+        parts.append(f"repository={filters.repository}")
+    if filters.model:
+        parts.append(f"model={filters.model}")
+    return ", ".join(parts)
 
 
 def _append_breakdown(
@@ -184,5 +214,24 @@ def _append_breakdown(
         report_lines.append(
             f"{row.key}: events={row.events:,} tokens={fmt_tokens(row.total_tokens)} "
             f"cost={fmt_usd(row.estimated_cost_usd)}"
+        )
+    report_lines.append("")
+
+
+def _append_top_events(
+    report_lines: list[str],
+    rows: list[SqliteUsageEventHighlight],
+) -> None:
+    report_lines.append("Top events")
+    if not rows:
+        report_lines.append("n/a")
+        report_lines.append("")
+        return
+    for row in rows:
+        report_lines.append(
+            f"{row.timestamp} | {row.repository} | {row.model} | "
+            f"tokens={fmt_tokens(row.total_tokens)} input={row.input_tokens:,} "
+            f"cached={row.cached_input_tokens:,} output={row.output_tokens:,} "
+            f"cost={fmt_usd(row.estimated_cost_usd)} | {row.session_file}"
         )
     report_lines.append("")

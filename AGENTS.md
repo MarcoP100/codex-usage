@@ -12,6 +12,8 @@ Mantenere `codex-usage` semplice, locale e manutenibile. Anche se e' un progetto
 - `pricing.py` e' il punto unico per prezzi, fallback e calcolo costi.
 - `usage_summary.py` e' il punto unico per deduplica e aggregazioni del report.
 - `text_report.py` genera solo testo leggibile. Non deve modificare dati o calcolare metriche nuove.
+- `markdown_report.py` genera solo Markdown leggibile. Non deve modificare dati o calcolare metriche nuove.
+- Le app, le dashboard e i report avanzati devono leggere da SQLite. I JSONL sono sorgente di import/ricostruzione, non una sorgente dati diretta per la UI.
 - `parser.py` deve restare tollerante e focalizzato sul parsing di una singola riga JSONL.
 - `models.py` contiene dataclass condivise e tipi di dominio.
 
@@ -30,6 +32,9 @@ Mantenere `codex-usage` semplice, locale e manutenibile. Anche se e' un progetto
 - `reports/` contiene report e CSV generati.
 - Non scrivere ne' modificare le sessioni Codex originali.
 - Per sviluppo locale preferire una copia delle sessioni.
+- La cartella `.codex` o la sua copia di backup e' la sorgente ricostruibile primaria.
+- Il database SQLite in `data/` e' importante per l'uso quotidiano, ma deve restare ricostruibile dai JSONL salvati.
+- Prima di cambiare schema o import, preservare la possibilita' di rigenerare il DB da una copia delle sessioni.
 
 ## Test
 

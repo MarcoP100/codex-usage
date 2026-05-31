@@ -18,6 +18,7 @@ Il progetto ha valore anche se resta personale: deve essere semplice da eseguire
 ## 2. Principi guida
 
 - **Locale prima di tutto**: i dati vengono letti dai file di sessione Codex e salvati localmente.
+- **SQLite dopo l'import**: report avanzati, app e dashboard leggono da SQLite. I JSONL sono usati per import, backfill e ricostruzione.
 - **Incrementale**: ogni fase deve lasciare il progetto in uno stato utilizzabile.
 - **Verificabile**: ogni metrica importante deve essere tracciabile fino agli eventi grezzi.
 - **Conservativo sui costi**: le stime sono utili per orientarsi, ma non devono essere presentate come costi reali di infrastruttura.
@@ -95,7 +96,16 @@ Responsabile della persistenza e delle query:
 - possibilita' di ricalcolare costi se cambia il pricing;
 - storico import idempotente.
 
-### 5.4 Presentazione
+### 5.4 Backup e ricostruibilita'
+
+Responsabile della continuita' dei dati:
+
+- la cartella `.codex`, o una sua copia completa, e' la sorgente primaria da preservare;
+- il DB SQLite in `data/` e' derivato e deve poter essere ricostruito dai JSONL;
+- prima di migrazioni o cambiamenti di schema, deve essere possibile fare una copia rapida del DB;
+- l'app non deve dipendere dai JSONL in runtime: dopo l'import tutto passa da SQLite.
+
+### 5.5 Presentazione
 
 Responsabile dell'uso quotidiano:
 
@@ -152,13 +162,12 @@ Criterio di uscita: il DB diventa la fonte principale per report avanzati e dash
 Obiettivo: passare da metriche grezze a insight pratici.
 
 - [x] Aggiungere comando `report` che legge da SQLite.
-- [ ] Aggiungere filtri CLI per periodo (`--from`, `--to`).
-- [ ] Aggiungere filtro per repository.
-- [ ] Aggiungere filtro per modello.
-- [ ] Aggiungere riepilogo mensile.
-- [ ] Aggiungere confronto tra due periodi.
-- [ ] Evidenziare top sessioni o giornate anomale.
-- [ ] Aggiungere export Markdown oltre al report testuale.
+- [x] Aggiungere filtri CLI per periodo (`--from`, `--to`).
+- [x] Aggiungere filtro per repository.
+- [x] Aggiungere filtro per modello.
+- [x] Aggiungere riepiloghi giornalieri, settimanali e mensili (`--group-by`).
+- [x] Evidenziare top sessioni, giornate ed eventi piu' pesanti.
+- [x] Aggiungere export Markdown oltre al report testuale.
 
 Criterio di uscita: il report risponde alle domande piu' frequenti senza dover aprire CSV o SQLite.
 
@@ -167,7 +176,7 @@ Criterio di uscita: il report risponde alle domande piu' frequenti senza dover a
 Obiettivo: rendere l'analisi piu' esplorabile.
 
 - [ ] Scegliere approccio leggero: Streamlit, FastAPI + frontend minimale, oppure notebook.
-- [ ] Leggere direttamente da SQLite.
+- [ ] Implementare la dashboard leggendo solo da SQLite.
 - [ ] Mostrare KPI principali: token, costo stimato, cache ratio, eventi, repository principali.
 - [ ] Aggiungere grafici per giorno/mese.
 - [ ] Aggiungere breakdown per modello, effort e repository.
@@ -205,11 +214,11 @@ Criterio di uscita: il progetto e' mantenibile senza dipendere dalla memoria di 
 
 Questi sono i prossimi interventi consigliati, in ordine pratico:
 
-1. Salvare `workspace_cwd` e repository in SQLite.
-2. Aggiungere filtri per periodo alla CLI.
-3. Creare viste SQLite per aggregati ricorrenti.
-4. Aggiungere export Markdown.
-5. Preparare una dashboard locale minima.
+1. Verificare manualmente report e Markdown su dati reali.
+2. Preparare una dashboard locale minima leggendo solo da SQLite.
+3. Aggiungere confronto tra due periodi.
+4. Aggiungere comandi o checklist di backup/restore.
+5. Valutare import incrementale da offset JSONL.
 
 ## 8. Rischi e attenzioni
 
@@ -218,11 +227,11 @@ Questi sono i prossimi interventi consigliati, in ordine pratico:
 - **Deduplica delicata**: bisogna evitare sia doppi conteggi sia perdita di eventi legittimi simili.
 - **Privacy**: i file raw possono contenere contenuti sensibili. Il progetto deve evitare export non necessari dei payload completi.
 - **Repository detection fragile**: usare solo l'ultimo segmento di `cwd` e' utile, ma puo' creare collisioni tra progetti con lo stesso nome.
+- **Backup incompleto**: perdere `.codex` o la copia delle sessioni impedisce di ricostruire lo storico. Il DB da solo non deve essere l'unico backup.
 
 ## 9. Decisioni aperte
 
 - La dashboard deve essere un'app Python semplice o un frontend web separato?
-- I report devono leggere sempre dai file JSONL o preferire SQLite dopo il primo import?
 - I prezzi devono stare in codice, config TOML o tabella SQLite?
 - Ha senso distinguere workspace, repository e progetto personale come tre concetti separati?
 - Vuoi mantenere il progetto strettamente personale o prepararlo per essere usabile anche da altri?

@@ -6,12 +6,13 @@ from pathlib import Path
 
 from codex_usage.config import load_app_config
 from codex_usage.db import import_token_events_to_sqlite
+from codex_usage.markdown_report import render_sqlite_usage_markdown
 from codex_usage.pricing import (
     DEFAULT_PRICING_USD_PER_MILLION,
     MODEL_PRICING_USD_PER_MILLION,
     cost_breakdown_usd,
 )
-from codex_usage.sqlite_report import build_sqlite_usage_report
+from codex_usage.sqlite_report import SqliteUsageReportFilters, build_sqlite_usage_report
 from codex_usage.text_report import render_sqlite_usage_report, render_summary_report
 from codex_usage.usage_summary import build_usage_summary_data
 
@@ -318,6 +319,43 @@ def _add_report_parser(subparsers: argparse._SubParsersAction) -> None:
         type=Path,
         help="Save console-style SQLite report to this text file",
     )
+    report_parser.add_argument(
+        "--save-markdown",
+        type=Path,
+        help="Save SQLite report to this Markdown file",
+    )
+    report_parser.add_argument(
+        "--from",
+        dest="from_date",
+        type=str,
+        default=None,
+        help="Include token events from this date, YYYY-MM-DD",
+    )
+    report_parser.add_argument(
+        "--to",
+        dest="to_date",
+        type=str,
+        default=None,
+        help="Include token events up to this date, YYYY-MM-DD",
+    )
+    report_parser.add_argument(
+        "--repository",
+        type=str,
+        default=None,
+        help="Filter token events by repository",
+    )
+    report_parser.add_argument(
+        "--model",
+        type=str,
+        default=None,
+        help="Filter token events by model",
+    )
+    report_parser.add_argument(
+        "--group-by",
+        choices=("day", "week", "month"),
+        default=None,
+        help="Show a complete usage breakdown grouped by day, week, or month",
+    )
 
 
 def cmd_summary(
@@ -387,13 +425,25 @@ def cmd_summary(
     return 0
 
 
-def cmd_report_sqlite(db_path: Path, save_report: Path | None) -> int:
-    report_data = build_sqlite_usage_report(db_path)
+def cmd_report_sqlite(
+    db_path: Path,
+    save_report: Path | None,
+    save_markdown: Path | None = None,
+    filters: SqliteUsageReportFilters | None = None,
+    group_by: str | None = None,
+) -> int:
+    report_data = build_sqlite_usage_report(db_path, filters=filters, group_by=group_by)
     report_text = render_sqlite_usage_report(report_data)
     print(report_text, end="")
     if save_report is not None:
         save_report.parent.mkdir(parents=True, exist_ok=True)
         save_report.write_text(report_text, encoding="utf-8")
+    if save_markdown is not None:
+        save_markdown.parent.mkdir(parents=True, exist_ok=True)
+        save_markdown.write_text(
+            render_sqlite_usage_markdown(report_data),
+            encoding="utf-8",
+        )
     return 0
 
 
@@ -443,9 +493,21 @@ def main() -> int:
         print(f"Backfilled token pricing: {result['pricing_backfilled_token_events']}")
         return 0
     if args.command == "report":
+        try:
+            report_filters = SqliteUsageReportFilters(
+                from_date=args.from_date,
+                to_date=args.to_date,
+                repository=args.repository,
+                model=args.model,
+            )
+        except ValueError as exc:
+            parser.error(str(exc))
         return cmd_report_sqlite(
             db_path=args.db_path or config.sqlite_db_path,
             save_report=args.save_report,
+            save_markdown=args.save_markdown,
+            filters=report_filters,
+            group_by=args.group_by,
         )
 
     parser.error(f"Unsupported command: {args.command}")
