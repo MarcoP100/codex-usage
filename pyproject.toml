@@ -23,6 +23,7 @@ where = ["src"]
 [tool.setuptools.package-data]
 codex_usage = [
     "web/templates/*.html",
+    "web/templates/partials/*.html",
     "web/static/*.css",
 ]
 

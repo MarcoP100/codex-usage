@@ -36,7 +36,9 @@ Il progetto dispone gia' di una base funzionante:
 - report testuale con totali, qualita' dati, breakdown per giorno, modello, effort e repository;
 - export CSV per eventi, riepilogo giornaliero, costi per modello e repository;
 - import SQLite idempotente con `raw_events` e `token_events`;
-- test automatici su parser, scanner, config, report e import SQLite.
+- report SQLite da CLI con filtri e Markdown;
+- dashboard locale FastAPI/Jinja che legge da SQLite e mostra KPI principali;
+- test automatici su parser, scanner, config, report, import SQLite e dashboard.
 
 La documentazione operativa esistente e' in `docs/how-codex-usage-works.md`.
 
@@ -177,8 +179,8 @@ Obiettivo: rendere l'analisi piu' esplorabile.
 
 - Roadmap operativa: `docs/phase-4-dashboard-roadmap.md`.
 - [x] Scegliere approccio leggero: FastAPI + Jinja + Docker Compose.
-- [ ] Implementare la dashboard leggendo solo da SQLite.
-- [ ] Mostrare KPI principali: token, costo stimato, cache ratio, eventi, repository principali.
+- [x] Implementare la dashboard leggendo solo da SQLite.
+- [x] Mostrare KPI principali: token, costo stimato, cache ratio, eventi, repository principali.
 - [ ] Aggiungere grafici per giorno/mese.
 - [ ] Aggiungere breakdown per modello, effort e repository.
 - [ ] Aggiungere filtri interattivi per periodo, repo, modello e dispositivo.
@@ -216,10 +218,11 @@ Criterio di uscita: il progetto e' mantenibile senza dipendere dalla memoria di 
 Questi sono i prossimi interventi consigliati, in ordine pratico:
 
 1. Verificare manualmente report e Markdown su dati reali.
-2. Preparare una dashboard locale minima leggendo solo da SQLite.
-3. Aggiungere confronto tra due periodi.
-4. Aggiungere comandi o checklist di backup/restore.
-5. Valutare import incrementale da offset JSONL.
+2. Aggiungere filtri interattivi alla dashboard locale.
+3. Aggiungere grafici leggeri per trend giornalieri o mensili.
+4. Aggiungere confronto tra due periodi.
+5. Aggiungere comandi o checklist di backup/restore.
+6. Valutare import incrementale da offset JSONL.
 
 ## 8. Rischi e attenzioni
 

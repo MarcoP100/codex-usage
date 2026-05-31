@@ -1,0 +1,29 @@
+<section class="data-table-section">
+  <h2>{{ title }}</h2>
+  {% if rows %}
+    <div class="table-scroll">
+      <table>
+        <thead>
+          <tr>
+            <th>Name</th>
+            <th>Events</th>
+            <th>Tokens</th>
+            <th>Cost</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for row in rows %}
+            <tr>
+              <td class="path">{{ row.key }}</td>
+              <td class="numeric">{{ row.events }}</td>
+              <td class="numeric">{{ row.tokens }}</td>
+              <td class="numeric">{{ row.cost }}</td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  {% else %}
+    <p class="empty-state">No rows found.</p>
+  {% endif %}
+</section>

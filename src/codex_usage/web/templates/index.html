@@ -3,7 +3,7 @@
 {% block title %}codex-usage dashboard{% endblock %}
 
 {% block content %}
-  <section class="status-panel">
+  <section class="status-panel page-section">
     <div>
       <p class="eyebrow">Local dashboard</p>
       <h1>codex-usage</h1>
@@ -32,4 +32,88 @@
       </div>
     </dl>
   </section>
+
+  {% if report_error %}
+    <section class="notice page-section">
+      <h2>Dashboard data</h2>
+      <p>{{ report_error }}</p>
+    </section>
+  {% endif %}
+
+  {% if report %}
+    <section class="summary-band page-section">
+      <div>
+        <p class="eyebrow">Covered period</p>
+        <h2>{{ report.period }}</h2>
+      </div>
+      <dl class="import-summary">
+        <div>
+          <dt>Import runs</dt>
+          <dd>{{ report.import_runs }}</dd>
+        </div>
+        <div>
+          <dt>Latest import</dt>
+          <dd>{{ report.latest_import }}</dd>
+        </div>
+      </dl>
+    </section>
+
+    <section class="kpi-grid page-section" aria-label="Token totals">
+      {% for label, value in report.totals %}
+        <div class="kpi-card">
+          <span>{{ label }}</span>
+          <strong>{{ value }}</strong>
+        </div>
+      {% endfor %}
+    </section>
+
+    <section class="tables-grid page-section">
+      {% with title="Top repositories", rows=report.top_repositories %}
+        {% include "partials/breakdown_table.html" %}
+      {% endwith %}
+      {% with title="Top models", rows=report.top_models %}
+        {% include "partials/breakdown_table.html" %}
+      {% endwith %}
+      {% with title="Top days", rows=report.top_days %}
+        {% include "partials/breakdown_table.html" %}
+      {% endwith %}
+      {% with title="Top sessions", rows=report.top_sessions %}
+        {% include "partials/breakdown_table.html" %}
+      {% endwith %}
+    </section>
+
+    <section class="data-table-section page-section">
+      <h2>Top events</h2>
+      {% if report.top_events %}
+        <div class="table-scroll">
+          <table>
+            <thead>
+              <tr>
+                <th>Timestamp</th>
+                <th>Repository</th>
+                <th>Model</th>
+                <th>Tokens</th>
+                <th>Cost</th>
+                <th>Session</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for row in report.top_events %}
+                <tr>
+                  <td>{{ row.timestamp }}</td>
+                  <td>{{ row.repository }}</td>
+                  <td>{{ row.model }}</td>
+                  <td class="numeric">{{ row.tokens }}</td>
+                  <td class="numeric">{{ row.cost }}</td>
+                  <td class="path">{{ row.session_file }}</td>
+                </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      {% else %}
+        <p class="empty-state">No token events found.</p>
+      {% endif %}
+    </section>
+  {% endif %}
 {% endblock %}

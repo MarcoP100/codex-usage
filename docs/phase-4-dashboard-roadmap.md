@@ -43,6 +43,8 @@ Per ora il container web non deve modificare i JSONL. L'import resta un comando 
 
 ## Step 1 - Skeleton web
 
+Stato: **completato**.
+
 Obiettivo: avere una web app minima avviabile.
 
 Attivita':
@@ -60,7 +62,18 @@ Criterio di uscita:
 - la pagina `/` risponde;
 - nessun accesso ai JSONL.
 
+Implementato:
+
+- dipendenze web dichiarate in `pyproject.toml`;
+- modulo `codex_usage.web`;
+- endpoint `/` con template Jinja e CSS minimale;
+- path DB letto da `CODEX_USAGE_DB_PATH`, `CODEX_USAGE_CONFIG`/`config.toml` o default;
+- test su risoluzione configurazione e homepage;
+- verifica manuale con `uvicorn`.
+
 ## Step 2 - Lettura dashboard da SQLite
+
+Stato: **completato**.
 
 Obiettivo: mostrare i KPI principali usando il layer dati gia' esistente.
 
@@ -82,6 +95,29 @@ Criterio di uscita:
 
 - la homepage mostra dati coerenti con `codex-usage report`;
 - test su almeno un DB temporaneo.
+
+Implementato:
+
+- la homepage riusa `build_sqlite_usage_report()` da `sqlite_report.py`;
+- nessuna lettura JSONL dalla dashboard;
+- KPI principali: periodo, eventi, token, cache ratio, costo stimato, pricing default;
+- tabelle per top repository, modelli, giornate, sessioni ed eventi;
+- messaggio chiaro per DB mancante o DB non inizializzato;
+- test con DB SQLite temporaneo popolato tramite import;
+- verifica nel browser locale su `http://127.0.0.1:8000/`.
+
+Avvio locale:
+
+```powershell
+python -m uvicorn codex_usage.web.app:app --reload
+```
+
+Se serve forzare un DB diverso da quello in `config.toml`:
+
+```powershell
+$env:CODEX_USAGE_DB_PATH = "data/codex_usage.db"
+python -m uvicorn codex_usage.web.app:app --reload
+```
 
 ## Step 3 - Filtri interattivi
 

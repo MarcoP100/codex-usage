@@ -2,13 +2,14 @@
 
 Strumento locale per analizzare l'uso di Codex a partire dai file di sessione `*.jsonl`.
 
-Il progetto oggi include una CLI per produrre report su token, cache, modelli, reasoning effort, repository e costi stimati API-equivalenti. Include anche export CSV e import idempotente in SQLite.
+Il progetto oggi include una CLI per produrre report su token, cache, modelli, reasoning effort, repository e costi stimati API-equivalenti. Include anche export CSV, import idempotente in SQLite e una dashboard locale minimale.
 
 Il punto non e' ricostruire il billing ufficiale, ma avere un osservatorio personale e locale sull'uso di Codex.
 
 ## Documenti
 
 - [Documento di progetto e roadmap](docs/project-roadmap.md)
+- [Roadmap dashboard fase 4](docs/phase-4-dashboard-roadmap.md)
 - [Funzionamento attuale e comandi](docs/how-codex-usage-works.md)
 - [Esempio configurazione](config.example.toml)
 
@@ -17,7 +18,7 @@ Il punto non e' ricostruire il billing ufficiale, ma avere un osservatorio perso
 - Python 3.11 o superiore.
 - Accesso locale alla directory sessioni di Codex.
 
-Il progetto non richiede dipendenze runtime esterne. Per i test usa `pytest`.
+Le dipendenze runtime sono dichiarate in `pyproject.toml` e includono FastAPI, Jinja e Uvicorn per la dashboard. Per i test usa `pytest`.
 
 ## Setup locale
 
@@ -54,6 +55,21 @@ $env:PYTHONPATH='src'
 python -m codex_usage.cli --config config.toml import-sqlite
 ```
 
+Dashboard locale:
+
+```powershell
+python -m uvicorn codex_usage.web.app:app --reload
+```
+
+Poi apri `http://127.0.0.1:8000/`.
+
+La dashboard legge solo da SQLite. Per forzare un DB specifico:
+
+```powershell
+$env:CODEX_USAGE_DB_PATH = "data/codex_usage.db"
+python -m uvicorn codex_usage.web.app:app --reload
+```
+
 Report con export principali:
 
 ```powershell
@@ -84,6 +100,7 @@ Per lavorare in sicurezza puoi puntare `sessions_dir` a una copia locale delle s
 - CSV costi stimati per modello.
 - CSV riepilogo per repository.
 - Database SQLite locale con eventi grezzi e token normalizzati.
+- Dashboard locale con periodo coperto, KPI token/costi/cache e top repository, modelli, giornate, sessioni ed eventi.
 
 ## Nota sui costi
 
@@ -99,4 +116,4 @@ python -m pytest
 
 ## Stato
 
-Progetto personale, non urgente, sviluppato in modo incrementale. La priorita' e' avere metriche locali affidabili prima di aggiungere dashboard o automazioni.
+Progetto personale, non urgente, sviluppato in modo incrementale. La dashboard locale e' avviabile e mostra i KPI principali da SQLite; restano da aggiungere filtri, grafici, vista data quality e Docker.

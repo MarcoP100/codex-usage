@@ -18,6 +18,10 @@ body {
   margin: 48px auto;
 }
 
+.page-section {
+  margin-bottom: 24px;
+}
+
 .status-panel {
   background: #ffffff;
   border: 1px solid #d8dee4;
@@ -38,6 +42,12 @@ h1 {
   margin: 0 0 24px;
   font-size: 32px;
   line-height: 1.15;
+}
+
+h2 {
+  margin: 0 0 16px;
+  font-size: 20px;
+  line-height: 1.25;
 }
 
 .status-grid {
@@ -69,6 +79,107 @@ dd {
   font-family: Consolas, "Courier New", monospace;
 }
 
+.notice,
+.summary-band,
+.data-table-section {
+  background: #ffffff;
+  border: 1px solid #d8dee4;
+  border-radius: 8px;
+  padding: 22px;
+}
+
+.notice {
+  border-color: #f0c36d;
+  background: #fff8e5;
+}
+
+.notice p,
+.empty-state {
+  margin: 0;
+  color: #59636e;
+}
+
+.summary-band {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 24px;
+}
+
+.summary-band h2 {
+  margin-bottom: 0;
+}
+
+.import-summary {
+  display: flex;
+  gap: 24px;
+  margin: 0;
+}
+
+.kpi-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 16px;
+}
+
+.kpi-card {
+  min-width: 0;
+  background: #ffffff;
+  border: 1px solid #d8dee4;
+  border-radius: 8px;
+  padding: 18px;
+}
+
+.kpi-card span {
+  display: block;
+  color: #59636e;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.kpi-card strong {
+  display: block;
+  margin-top: 8px;
+  font-size: 24px;
+  line-height: 1.15;
+  overflow-wrap: anywhere;
+}
+
+.tables-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+}
+
+.table-scroll {
+  overflow-x: auto;
+}
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 14px;
+}
+
+th,
+td {
+  border-top: 1px solid #eaeef2;
+  padding: 10px 8px;
+  text-align: left;
+  vertical-align: top;
+}
+
+th {
+  color: #59636e;
+  font-size: 12px;
+  text-transform: uppercase;
+}
+
+.numeric {
+  text-align: right;
+  white-space: nowrap;
+}
+
 @media (max-width: 680px) {
   .page-shell {
     margin: 24px auto;
@@ -79,6 +190,20 @@ dd {
   }
 
   .status-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .summary-band,
+  .import-summary {
+    display: block;
+  }
+
+  .import-summary div + div {
+    margin-top: 14px;
+  }
+
+  .kpi-grid,
+  .tables-grid {
     grid-template-columns: 1fr;
   }
 }
