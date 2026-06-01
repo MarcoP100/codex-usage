@@ -69,11 +69,22 @@ class SqliteUsageReportFilters:
 @dataclass(frozen=True, slots=True)
 class SqliteImportRun:
     import_run_id: str
+    started_at: str
     completed_at: str
+    sessions_dir: str
+    source_device: str | None
+    source_account: str | None
     files_scanned: int
     lines_scanned: int
+    raw_inserted: int
+    raw_skipped_duplicate: int
     token_inserted: int
     token_skipped_duplicate: int
+    malformed_json_lines: int
+    missing_payload_type: int
+    missing_token_fields: int
+    non_token_events: int
+    default_pricing_token_events: int
 
 
 @dataclass(frozen=True, slots=True)
@@ -84,6 +95,7 @@ class SqliteUsageReportData:
     totals: SqliteUsageTotals
     import_runs_count: int
     latest_import_run: SqliteImportRun | None
+    recent_import_runs: list[SqliteImportRun]
     top_repositories: list[SqliteUsageBreakdownRow]
     top_models: list[SqliteUsageBreakdownRow]
     recent_daily_usage: list[SqliteUsageBreakdownRow]
@@ -112,6 +124,7 @@ def build_sqlite_usage_report(
             totals=_fetch_totals(conn, filters),
             import_runs_count=_fetch_import_runs_count(conn),
             latest_import_run=_fetch_latest_import_run(conn),
+            recent_import_runs=_fetch_recent_import_runs(conn),
             top_repositories=_fetch_breakdown(
                 conn,
                 filters=filters,
@@ -240,24 +253,53 @@ def _fetch_import_runs_count(conn: sqlite3.Connection) -> int:
 
 
 def _fetch_latest_import_run(conn: sqlite3.Connection) -> SqliteImportRun | None:
-    row = conn.execute(
+    rows = _fetch_recent_import_runs(conn, limit=1)
+    if not rows:
+        return None
+    return rows[0]
+
+
+def _fetch_recent_import_runs(
+    conn: sqlite3.Connection,
+    *,
+    limit: int = 5,
+) -> list[SqliteImportRun]:
+    rows = conn.execute(
         """
-        SELECT import_run_id, completed_at, files_scanned, lines_scanned,
-               token_inserted, token_skipped_duplicate
+        SELECT import_run_id, started_at, completed_at, sessions_dir,
+               source_device, source_account, files_scanned, lines_scanned,
+               raw_inserted, raw_skipped_duplicate, token_inserted,
+               token_skipped_duplicate, malformed_json_lines,
+               missing_payload_type, missing_token_fields, non_token_events,
+               default_pricing_token_events
         FROM import_runs
         ORDER BY completed_at DESC
-        LIMIT 1
-        """
-    ).fetchone()
-    if row is None:
-        return None
+        LIMIT ?
+        """,
+        (limit,),
+    ).fetchall()
+    return [_import_run_from_row(row) for row in rows]
+
+
+def _import_run_from_row(row: sqlite3.Row) -> SqliteImportRun:
     return SqliteImportRun(
         import_run_id=row["import_run_id"],
+        started_at=row["started_at"],
         completed_at=row["completed_at"],
+        sessions_dir=row["sessions_dir"],
+        source_device=row["source_device"],
+        source_account=row["source_account"],
         files_scanned=row["files_scanned"],
         lines_scanned=row["lines_scanned"],
+        raw_inserted=row["raw_inserted"],
+        raw_skipped_duplicate=row["raw_skipped_duplicate"],
         token_inserted=row["token_inserted"],
         token_skipped_duplicate=row["token_skipped_duplicate"],
+        malformed_json_lines=row["malformed_json_lines"],
+        missing_payload_type=row["missing_payload_type"],
+        missing_token_fields=row["missing_token_fields"],
+        non_token_events=row["non_token_events"],
+        default_pricing_token_events=row["default_pricing_token_events"],
     )
 
 

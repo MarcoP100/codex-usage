@@ -25,6 +25,9 @@ Jinja e' un motore di template: permette di scrivere file HTML con placeholder e
 - I backup veri restano le sessioni `.codex` o la loro copia.
 - La dashboard deve essere utile anche se resta minimale.
 - La prima versione deve evitare login, multiutente, upload e automazioni live.
+- `codex_usage.web.app` deve restare leggero: wiring FastAPI, route e composizione del contesto.
+- `codex_usage.web.view_models` prepara i dati per i template senza duplicare le query di report.
+- Le metriche e aggregazioni continuano a vivere nel layer condiviso `sqlite_report.py`.
 
 ## Architettura target iniziale
 
@@ -155,6 +158,8 @@ Nota: il filtro `device` resta fuori da questo step perche' il layer condiviso `
 
 ## Step 4 - Grafici leggeri
 
+Stato: **completato** con grafici HTML/CSS server-side.
+
 Obiettivo: rendere visibili trend e distribuzioni senza introdurre un frontend pesante.
 
 Attivita':
@@ -169,7 +174,20 @@ Criterio di uscita:
 - i trend principali sono leggibili a colpo d'occhio;
 - la dashboard resta usabile anche senza interazioni complesse.
 
+Implementato:
+
+- grafico a barre per utilizzo giornaliero recente;
+- grafico a barre per repository principali;
+- grafico a barre per modelli principali;
+- nessuna dipendenza JavaScript frontend;
+- larghezze barre calcolate nel layer web Python;
+- tabelle esistenti mantenute come fallback leggibile;
+- grafici coerenti con i filtri attivi;
+- test su DB temporaneo e DB inizializzato senza eventi.
+
 ## Step 5 - Vista data quality
+
+Stato: **completato**.
 
 Obiettivo: esporre i segnali di qualita' import senza aprire SQLite.
 
@@ -183,6 +201,16 @@ Attivita':
 Criterio di uscita:
 
 - si capisce se l'ultimo import e' sano.
+
+Implementato:
+
+- ultimo import con file, righe, raw inseriti e duplicati;
+- token inseriti e duplicati;
+- malformed JSON, missing payload/type e missing token fields;
+- eventi con pricing default;
+- tabella ultimi import;
+- dati letti da `import_runs` tramite il report SQLite condiviso;
+- test su DB temporaneo con righe valide, incomplete e malformate.
 
 ## Step 6 - Docker
 

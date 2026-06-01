@@ -1,0 +1,24 @@
+<section class="chart-panel">
+  <h2>{{ title }}</h2>
+  {% if rows %}
+    <ol class="bar-chart">
+      {% for row in rows %}
+        <li>
+          <div class="bar-row-header">
+            <span class="bar-label">{{ row.label }}</span>
+            <span class="bar-value">{{ row.tokens }}</span>
+          </div>
+          <div class="bar-track" aria-hidden="true">
+            <div class="bar-fill" style="width: {{ row.width }}%"></div>
+          </div>
+          <div class="bar-meta">
+            <span>{{ row.events }} event{% if row.events != "1" %}s{% endif %}</span>
+            <span>{{ row.cost }}</span>
+          </div>
+        </li>
+      {% endfor %}
+    </ol>
+  {% else %}
+    <p class="empty-state">No rows found.</p>
+  {% endif %}
+</section>

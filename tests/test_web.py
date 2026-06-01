@@ -107,7 +107,12 @@ def test_homepage_shows_sqlite_usage_kpis(
     assert "web-demo" in response.text
     assert "Top models" in response.text
     assert "gpt-5.4" in response.text
+    assert "Recent daily usage" in response.text
+    assert "Top repositories by tokens" in response.text
+    assert "Top models by tokens" in response.text
     assert "Top events" in response.text
+    assert "Data quality" in response.text
+    assert "Latest import" in response.text
 
 
 def test_homepage_handles_existing_empty_database(
@@ -123,6 +128,33 @@ def test_homepage_handles_existing_empty_database(
 
     assert response.status_code == 200
     assert "SQLite database is not ready" in response.text
+
+
+def test_homepage_handles_initialized_database_without_events(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    sessions_dir = tmp_path / "sessions"
+    sessions_dir.mkdir()
+    db_path = tmp_path / "usage.db"
+    import_token_events_to_sqlite(
+        db_path=db_path,
+        sessions_dir=sessions_dir,
+        include_archived_sessions=False,
+        source_device=None,
+        source_account=None,
+        pricing=MODEL_PRICING_USD_PER_MILLION,
+        default_pricing=MODEL_PRICING_USD_PER_MILLION["gpt-5.5"],
+    )
+    monkeypatch.setenv(DB_PATH_ENV, str(db_path))
+    client = TestClient(create_app())
+
+    response = client.get("/")
+
+    assert response.status_code == 200
+    assert "No token events" in response.text
+    assert "Recent daily usage" in response.text
+    assert "No rows found." in response.text
 
 
 def test_homepage_filters_sqlite_usage(
@@ -177,6 +209,7 @@ def test_homepage_filters_sqlite_usage(
     assert "Filtered view" in response.text
     assert "Total tokens" in response.text
     assert "115" in response.text
+    assert "Recent daily usage" in response.text
     assert "keep" in response.text
     assert "drop" not in response.text
     assert "gpt-5.4-mini" not in response.text
@@ -196,3 +229,48 @@ def test_homepage_shows_filter_validation_errors(
     assert response.status_code == 200
     assert "--from must use YYYY-MM-DD format" in response.text
     assert 'value="2026/05/20"' in response.text
+
+
+def test_homepage_shows_data_quality_counters(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    sessions_dir = tmp_path / "sessions"
+    sessions_dir.mkdir()
+    session_file = sessions_dir / "rollout-quality-report.jsonl"
+    session_file.write_text(
+        "\n".join(
+            [
+                '{"timestamp":"2026-05-20T10:00:00Z","type":"turn_context","payload":{"model":"unknown-model","effort":"medium","cwd":"C:/repo/quality"}}',
+                '{"timestamp":"2026-05-20T10:00:01Z","type":"event_msg","payload":{"type":"token_count","info":{"last_token_usage":{"input_tokens":100,"cached_input_tokens":20,"output_tokens":10,"reasoning_output_tokens":5,"total_tokens":115}}}}',
+                '{"timestamp":"2026-05-20T10:00:02Z","type":"event_msg","payload":{"type":"token_count","info":{"last_token_usage":{"input_tokens":100}}}}',
+                '{"timestamp":"2026-05-20T10:00:03Z","type":"event_msg"}',
+                '{"timestamp":"2026-05-20T10:00:04Z",',
+            ]
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    db_path = tmp_path / "usage.db"
+    import_token_events_to_sqlite(
+        db_path=db_path,
+        sessions_dir=sessions_dir,
+        include_archived_sessions=False,
+        source_device="laptop",
+        source_account="marco",
+        pricing=MODEL_PRICING_USD_PER_MILLION,
+        default_pricing=MODEL_PRICING_USD_PER_MILLION["gpt-5.5"],
+    )
+    monkeypatch.setenv(DB_PATH_ENV, str(db_path))
+    client = TestClient(create_app())
+
+    response = client.get("/")
+
+    assert response.status_code == 200
+    assert "Data quality" in response.text
+    assert "laptop / marco" in response.text
+    assert "Malformed JSON" in response.text
+    assert "Missing payload/type" in response.text
+    assert "Missing token fields" in response.text
+    assert "Default pricing" in response.text
+    assert "<dd>1</dd>" in response.text

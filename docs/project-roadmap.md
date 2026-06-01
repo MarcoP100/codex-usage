@@ -182,10 +182,10 @@ Obiettivo: rendere l'analisi piu' esplorabile.
 - [x] Implementare la dashboard leggendo solo da SQLite.
 - [x] Mostrare KPI principali: token, costo stimato, cache ratio, eventi, repository principali.
 - [x] Aggiungere filtri interattivi per periodo, repo e modello.
-- [ ] Aggiungere grafici per giorno/mese.
+- [x] Aggiungere grafici leggeri per giorno/repository/modello.
 - [ ] Aggiungere breakdown per modello, effort e repository.
 - [ ] Aggiungere filtro dashboard per dispositivo.
-- [ ] Aggiungere vista "data quality".
+- [x] Aggiungere vista "data quality".
 
 Criterio di uscita: una dashboard locale consente di esplorare i dati senza rigenerare manualmente report.
 
@@ -219,9 +219,9 @@ Criterio di uscita: il progetto e' mantenibile senza dipendere dalla memoria di 
 Questi sono i prossimi interventi consigliati, in ordine pratico:
 
 1. Verificare manualmente report e Markdown su dati reali.
-2. Aggiungere grafici leggeri per trend giornalieri o mensili.
-3. Aggiungere vista data quality alla dashboard.
-4. Aggiungere filtro dashboard per dispositivo.
+2. Aggiungere Docker Compose per la dashboard.
+3. Aggiungere filtro dashboard per dispositivo.
+4. Aggiungere breakdown per reasoning effort.
 5. Aggiungere confronto tra due periodi.
 6. Aggiungere comandi o checklist di backup/restore.
 7. Valutare import incrementale da offset JSONL.

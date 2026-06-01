@@ -96,6 +96,18 @@
       {% endfor %}
     </section>
 
+    <section class="charts-grid page-section" aria-label="Usage charts">
+      {% with title="Recent daily usage", rows=report.charts.daily %}
+        {% include "partials/bar_chart.html" %}
+      {% endwith %}
+      {% with title="Top repositories by tokens", rows=report.charts.repositories %}
+        {% include "partials/bar_chart.html" %}
+      {% endwith %}
+      {% with title="Top models by tokens", rows=report.charts.models %}
+        {% include "partials/bar_chart.html" %}
+      {% endwith %}
+    </section>
+
     <section class="tables-grid page-section">
       {% with title="Top repositories", rows=report.top_repositories %}
         {% include "partials/breakdown_table.html" %}
@@ -142,6 +154,96 @@
         </div>
       {% else %}
         <p class="empty-state">No token events found.</p>
+      {% endif %}
+    </section>
+
+    <section class="data-quality-section page-section">
+      <h2>Data quality</h2>
+      {% if report.data_quality.latest %}
+        <div class="quality-layout">
+          <div>
+            <p class="eyebrow">Latest import</p>
+            <dl class="quality-grid">
+              <div>
+                <dt>Completed at</dt>
+                <dd>{{ report.data_quality.latest.completed_at }}</dd>
+              </div>
+              <div>
+                <dt>Source</dt>
+                <dd>{{ report.data_quality.latest.source }}</dd>
+              </div>
+              <div>
+                <dt>Files scanned</dt>
+                <dd>{{ report.data_quality.latest.files_scanned }}</dd>
+              </div>
+              <div>
+                <dt>Lines scanned</dt>
+                <dd>{{ report.data_quality.latest.lines_scanned }}</dd>
+              </div>
+              <div>
+                <dt>Raw inserted</dt>
+                <dd>{{ report.data_quality.latest.raw_inserted }}</dd>
+              </div>
+              <div>
+                <dt>Raw duplicates</dt>
+                <dd>{{ report.data_quality.latest.raw_skipped_duplicate }}</dd>
+              </div>
+              <div>
+                <dt>Token inserted</dt>
+                <dd>{{ report.data_quality.latest.token_inserted }}</dd>
+              </div>
+              <div>
+                <dt>Token duplicates</dt>
+                <dd>{{ report.data_quality.latest.token_skipped_duplicate }}</dd>
+              </div>
+              <div>
+                <dt>Malformed JSON</dt>
+                <dd>{{ report.data_quality.latest.malformed_json_lines }}</dd>
+              </div>
+              <div>
+                <dt>Missing payload/type</dt>
+                <dd>{{ report.data_quality.latest.missing_payload_type }}</dd>
+              </div>
+              <div>
+                <dt>Missing token fields</dt>
+                <dd>{{ report.data_quality.latest.missing_token_fields }}</dd>
+              </div>
+              <div>
+                <dt>Default pricing</dt>
+                <dd>{{ report.data_quality.latest.default_pricing_token_events }}</dd>
+              </div>
+            </dl>
+          </div>
+          <div>
+            <p class="eyebrow">Recent imports</p>
+            <div class="table-scroll">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Completed</th>
+                    <th>Lines</th>
+                    <th>Tokens</th>
+                    <th>Duplicates</th>
+                    <th>Issues</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {% for row in report.data_quality.recent_imports %}
+                    <tr>
+                      <td>{{ row.completed_at }}</td>
+                      <td class="numeric">{{ row.lines_scanned }}</td>
+                      <td class="numeric">{{ row.token_inserted }}</td>
+                      <td class="numeric">{{ row.token_skipped_duplicate }}</td>
+                      <td class="numeric">{{ row.malformed_json_lines }}/{{ row.missing_payload_type }}/{{ row.missing_token_fields }}</td>
+                    </tr>
+                  {% endfor %}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      {% else %}
+        <p class="empty-state">No import runs found.</p>
       {% endif %}
     </section>
   {% endif %}

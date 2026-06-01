@@ -82,6 +82,8 @@ dd {
 .notice,
 .filter-panel,
 .summary-band,
+.chart-panel,
+.data-quality-section,
 .data-table-section {
   background: #ffffff;
   border: 1px solid #d8dee4;
@@ -178,6 +180,25 @@ dd {
   margin: 0;
 }
 
+.quality-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr);
+  gap: 22px;
+}
+
+.quality-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+  margin: 0;
+}
+
+.quality-grid div {
+  min-width: 0;
+  border-top: 1px solid #eaeef2;
+  padding-top: 10px;
+}
+
 .kpi-grid {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
@@ -211,6 +232,65 @@ dd {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 16px;
+}
+
+.charts-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+}
+
+.charts-grid .chart-panel:first-child {
+  grid-column: 1 / -1;
+}
+
+.bar-chart {
+  display: grid;
+  gap: 14px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.bar-row-header,
+.bar-meta {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.bar-label {
+  min-width: 0;
+  overflow: hidden;
+  font-weight: 700;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.bar-value {
+  color: #1f6feb;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.bar-track {
+  height: 12px;
+  margin-top: 8px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: #eaeef2;
+}
+
+.bar-fill {
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, #1f6feb, #2da44e);
+}
+
+.bar-meta {
+  margin-top: 6px;
+  color: #59636e;
+  font-size: 13px;
 }
 
 .table-scroll {
@@ -256,18 +336,29 @@ th {
   }
 
   .summary-band,
-  .import-summary {
+  .import-summary,
+  .quality-layout {
     display: block;
   }
 
-  .import-summary div + div {
+  .import-summary div + div,
+  .quality-layout > div + div {
     margin-top: 14px;
+  }
+
+  .quality-grid {
+    grid-template-columns: 1fr;
   }
 
   .kpi-grid,
   .tables-grid,
+  .charts-grid,
   .filter-form {
     grid-template-columns: 1fr;
+  }
+
+  .charts-grid .chart-panel:first-child {
+    grid-column: auto;
   }
 
   .filter-actions {
